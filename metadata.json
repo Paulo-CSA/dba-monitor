@@ -1,0 +1,6 @@
+{
+  "name": "PgMonitor - Database Monitoring",
+  "description": "PostgreSQL Database Monitoring Dashboard with Real-time CPU & Latency Metrics, File Locations, Health Checks, Stuck Queries & Locks, Backup Tracking, Custom Alerts, and CSV/PDF Export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

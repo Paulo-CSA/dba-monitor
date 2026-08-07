@@ -1,0 +1,674 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Header } from './components/Header';
+import { MetricCard } from './components/MetricCard';
+import { MetricsCharts } from './components/MetricsCharts';
+import { ConfigViewer } from './components/ConfigViewer';
+import { IntegrityHealthCard } from './components/IntegrityHealthCard';
+import { BackupTracker } from './components/BackupTracker';
+import { StuckQueriesTable } from './components/StuckQueriesTable';
+import { ActiveLocksView } from './components/ActiveLocksView';
+import { AlertRulesManager } from './components/AlertRulesManager';
+import { AiQueryModal } from './components/AiQueryModal';
+import { ExportReportModal } from './components/ExportReportModal';
+import { ConnectionSettingsModal } from './components/ConnectionSettingsModal';
+
+import { ServerFleetOverview } from './components/ServerFleetOverview';
+import { ServerSidebarDashboard } from './components/ServerSidebarDashboard';
+import { GlobalDashboardView } from './components/GlobalDashboardView';
+import { SelectedServerContextBar } from './components/SelectedServerContextBar';
+import { ServerInstance } from './types/serverFleet';
+import { RealtimeMetricsPayload } from './types/metrics';
+import { PgSystemConfig } from './types/config';
+import { DatabaseIntegrityOverview } from './types/health';
+import { BackupOverview } from './types/backup';
+import { StuckQuery, ActiveLock } from './types/locks';
+import { AlertRule, ActiveAlert } from './types/alerts';
+import { ReportFilterOptions } from './types/export';
+
+import { exportToCSV } from './utils/csvExporter';
+import { exportToPDF } from './utils/pdfExporter';
+import { analyzeQueryWithAI } from './services/aiDiagnosticService';
+import { formatMs } from './utils/formatters';
+
+import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isLive, setIsLive] = useState<boolean>(true);
+  const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(2000);
+  const [isLoadSpike, setIsLoadSpike] = useState<boolean>(false);
+
+  // Fleet & Observability States
+  const [fleetServers, setFleetServers] = useState<ServerInstance[]>([]);
+  const [selectedServerId, setSelectedServerId] = useState<string>('srv-prod-us-01');
+  const [selectedDatabaseName, setSelectedDatabaseName] = useState<string>('production_db');
+
+  // Core Data States
+  const [metrics, setMetrics] = useState<RealtimeMetricsPayload | null>(null);
+  const [sysConfig, setSysConfig] = useState<PgSystemConfig | null>(null);
+  const [sqlConfigQuery, setSqlConfigQuery] = useState<string>('');
+  const [integrity, setIntegrity] = useState<DatabaseIntegrityOverview | null>(null);
+  const [backupOverview, setBackupOverview] = useState<BackupOverview | null>(null);
+  const [stuckQueries, setStuckQueries] = useState<StuckQuery[]>([]);
+  const [activeLocks, setActiveLocks] = useState<ActiveLock[]>([]);
+
+  // Alert States
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
+  const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
+
+  // Modal States
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [showAlertModal, setShowAlertModal] = useState<boolean>(false);
+  const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
+
+  // AI Modal States
+  const [selectedAiQuery, setSelectedAiQuery] = useState<StuckQuery | null>(null);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState<boolean>(false);
+
+  // Action Pending States
+  const [killingPid, setKillingPid] = useState<number | null>(null);
+  const [isScanningIntegrity, setIsScanningIntegrity] = useState<boolean>(false);
+  const [isTriggeringBackup, setIsTriggeringBackup] = useState<boolean>(false);
+
+  // Initial Data Load
+  const fetchInitialStaticData = useCallback(async () => {
+    try {
+      const [serversRes, configRes, integrityRes, locksRes, backupRes, rulesRes] = await Promise.all([
+        fetch('/api/db/servers'),
+        fetch('/api/db/config'),
+        fetch('/api/db/integrity'),
+        fetch('/api/db/locks'),
+        fetch('/api/db/backups'),
+        fetch('/api/db/alerts/rules')
+      ]);
+
+      if (serversRes.ok) {
+        const sData = await serversRes.json();
+        if (sData.servers) {
+          setFleetServers(sData.servers);
+        }
+      }
+
+      if (configRes.ok) {
+        const cData = await configRes.json();
+        setSysConfig(cData.config);
+        setSqlConfigQuery(cData.sqlQuery);
+      }
+
+      if (integrityRes.ok) {
+        const iData = await integrityRes.json();
+        setIntegrity(iData);
+      }
+
+      if (locksRes.ok) {
+        const lData = await locksRes.json();
+        setStuckQueries(lData.stuckQueries);
+        setActiveLocks(lData.activeLocks);
+      }
+
+      if (backupRes.ok) {
+        const bData = await backupRes.json();
+        setBackupOverview(bData);
+      }
+
+      if (rulesRes.ok) {
+        const rData = await rulesRes.json();
+        setAlertRules(rData);
+      }
+    } catch (err) {
+      console.error('Error loading initial static data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInitialStaticData();
+  }, [fetchInitialStaticData]);
+
+  // Real-time Polling Engine
+  useEffect(() => {
+    if (!isLive) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/db/metrics');
+        if (res.ok) {
+          const data = await res.json();
+          setMetrics(data.metrics);
+          setActiveAlerts(data.alerts || []);
+          setIsLoadSpike(data.isLoadSpike);
+        }
+      } catch (err) {
+        console.error('Metrics fetch error:', err);
+      }
+    }, refreshIntervalMs);
+
+    return () => clearInterval(interval);
+  }, [isLive, refreshIntervalMs]);
+
+  // Handler for Toggling Load Spike
+  const handleToggleLoadSpike = async () => {
+    const nextState = !isLoadSpike;
+    setIsLoadSpike(nextState);
+    try {
+      await fetch('/api/db/metrics/simulate-spike', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: nextState })
+      });
+    } catch (err) {
+      console.error('Error toggling spike:', err);
+    }
+  };
+
+  // Handler for Terminating Backend PID
+  const handleKillPid = async (pid: number) => {
+    setKillingPid(pid);
+    try {
+      const res = await fetch('/api/db/kill-pid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setStuckQueries((prev) => prev.filter((q) => q.pid !== pid));
+          setActiveLocks((prev) => prev.filter((l) => l.pid !== pid));
+        }
+      }
+    } catch (err) {
+      console.error('Error terminating PID:', err);
+    } finally {
+      setKillingPid(null);
+    }
+  };
+
+  // Handler for AI Query Analysis
+  const handleAnalyzeWithAi = async (queryItem: StuckQuery) => {
+    setSelectedAiQuery(queryItem);
+    setAiAnalysisResult(null);
+    setIsAnalyzingAi(true);
+
+    try {
+      const analysis = await analyzeQueryWithAI(
+        queryItem.query,
+        queryItem.durationSeconds,
+        queryItem.wait_event,
+        queryItem.blocking_pid
+      );
+      setAiAnalysisResult(analysis);
+    } catch (err) {
+      setAiAnalysisResult('Erro ao obter diagnóstico de IA.');
+    } finally {
+      setIsAnalyzingAi(false);
+    }
+  };
+
+  // Handler for Integrity Scan
+  const handleRunScan = async () => {
+    setIsScanningIntegrity(true);
+    try {
+      const res = await fetch('/api/db/integrity/scan', { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        setIntegrity(updated);
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+    } finally {
+      setIsScanningIntegrity(false);
+    }
+  };
+
+  // Handler for Manual Backup
+  const handleTriggerBackup = async (type: 'pg_dump' | 'pg_basebackup') => {
+    setIsTriggeringBackup(true);
+    try {
+      const res = await fetch('/api/db/backups/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.entry) {
+          setBackupOverview((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              lastBackupTimestamp: data.entry.startTime,
+              timeSinceLastBackupFormatted: 'Agora mesmo',
+              recentBackups: [data.entry, ...prev.recentBackups]
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Backup trigger error:', err);
+    } finally {
+      setIsTriggeringBackup(false);
+    }
+  };
+
+  // Alert Rule Handlers
+  const handleAddRule = async (rule: Omit<AlertRule, 'id'>) => {
+    try {
+      const res = await fetch('/api/db/alerts/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rule)
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setAlertRules((prev) => [...prev, created]);
+      }
+    } catch (err) {
+      console.error('Add rule error:', err);
+    }
+  };
+
+  const handleToggleRule = async (id: string) => {
+    setAlertRules((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
+    );
+    try {
+      await fetch('/api/db/alerts/rules/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (err) {
+      console.error('Toggle rule error:', err);
+    }
+  };
+
+  // CSV Export Trigger
+  const handleExportCSV = (options: ReportFilterOptions) => {
+    if (!metrics || !sysConfig || !integrity || !backupOverview) return;
+    exportToCSV(
+      options,
+      metrics,
+      sysConfig.fileLocations,
+      integrity,
+      backupOverview,
+      stuckQueries,
+      activeLocks
+    );
+    setShowExportModal(false);
+  };
+
+  // PDF Export Trigger
+  const handleExportPDF = (options: ReportFilterOptions) => {
+    if (!metrics || !sysConfig || !integrity || !backupOverview) return;
+    exportToPDF(
+      options,
+      metrics,
+      sysConfig.fileLocations,
+      integrity,
+      backupOverview,
+      stuckQueries,
+      activeLocks
+    );
+    setShowExportModal(false);
+  };
+
+  const handleUpdateServer = (updatedServer: ServerInstance) => {
+    setFleetServers((prev) =>
+      prev.map((srv) => (srv.id === updatedServer.id ? updatedServer : srv))
+    );
+  };
+
+  const handleDeleteServer = (serverId: string) => {
+    setFleetServers((prev) => {
+      const next = prev.filter((srv) => srv.id !== serverId);
+      if (selectedServerId === serverId && next.length > 0) {
+        setSelectedServerId(next[0].id);
+        if (next[0].databases.length > 0) {
+          setSelectedDatabaseName(next[0].databases[0].datname);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleAddServer = (newServer: ServerInstance) => {
+    setFleetServers((prev) => [...prev, newServer]);
+    setSelectedServerId(newServer.id);
+    if (newServer.databases.length > 0) {
+      setSelectedDatabaseName(newServer.databases[0].datname);
+    }
+  };
+
+  const handleSaveConnectionServer = (serverData: {
+    name: string;
+    host: string;
+    port: number;
+    user: string;
+    password?: string;
+    database: string;
+  }) => {
+    const newServerId = `srv-${Date.now().toString().slice(-4)}`;
+    const dbName = serverData.database || 'production_db';
+    const newServer: ServerInstance = {
+      id: newServerId,
+      name: serverData.name || 'Novo Servidor PG',
+      host: serverData.host || '127.0.0.1',
+      port: serverData.port || 5432,
+      dbUser: serverData.user || 'postgres',
+      dbPassword: serverData.password || '',
+      region: 'sa-east-1',
+      environment: 'Produção',
+      pgVersion: 'PostgreSQL 16.2',
+      uptimeFormatted: '1d 0h',
+      cpuUsagePercent: 12,
+      avgLatencyMs: 1.5,
+      totalDatabasesCount: 1,
+      totalActiveConnections: 10,
+      totalSizeFormatted: '4.5 GB',
+      status: 'healthy',
+      databases: [
+        {
+          datname: dbName,
+          sizeBytes: 4.5 * 1024 * 1024 * 1024,
+          sizeFormatted: '4.5 GB',
+          activeConnections: 10,
+          maxConnections: 100,
+          tps: 140,
+          cacheHitRatio: 99.8,
+          owner: serverData.user || 'postgres',
+          encoding: 'UTF8',
+          status: 'online'
+        }
+      ]
+    };
+
+    setFleetServers((prev) => [...prev, newServer]);
+    setSelectedServerId(newServerId);
+    setSelectedDatabaseName(dbName);
+    setShowConnectionModal(false);
+  };
+
+  const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
+  const activeDb =
+    activeServerObject?.databases.find((d) => d.datname === selectedDatabaseName) ||
+    activeServerObject?.databases[0];
+
+  const activeCpuUsage = activeServerObject
+    ? Math.min(99, Math.max(2, Math.round(activeServerObject.cpuUsagePercent)))
+    : metrics?.currentCpu.usagePercent || 25;
+
+  const activeLatencyMs = activeServerObject
+    ? parseFloat(activeServerObject.avgLatencyMs.toFixed(2))
+    : metrics?.currentLatency.avgLatencyMs || 2.1;
+
+  const activeConnections = activeDb
+    ? activeDb.activeConnections
+    : activeServerObject?.totalActiveConnections || 45;
+
+  const maxConnections = activeDb ? activeDb.maxConnections : 200;
+  const tps = activeDb ? activeDb.tps : 1200;
+  const cacheHitRatio = activeDb ? activeDb.cacheHitRatio : 99.8;
+
+  const activeServerMetrics = metrics
+    ? {
+        ...metrics,
+        currentCpu: {
+          ...metrics.currentCpu,
+          usagePercent: activeCpuUsage,
+          userPercent: parseFloat((activeCpuUsage * 0.75).toFixed(1)),
+          systemPercent: parseFloat((activeCpuUsage * 0.2).toFixed(1)),
+          iowaitPercent: parseFloat((activeCpuUsage * 0.05).toFixed(1))
+        },
+        currentLatency: {
+          ...metrics.currentLatency,
+          avgLatencyMs: activeLatencyMs,
+          readLatencyMs: parseFloat((activeLatencyMs * 0.75).toFixed(2)),
+          writeLatencyMs: parseFloat((activeLatencyMs * 1.35).toFixed(2)),
+          p95LatencyMs: parseFloat((activeLatencyMs * 2.1).toFixed(2))
+        },
+        currentResources: {
+          ...metrics.currentResources,
+          activeConnections,
+          maxConnections,
+          tps,
+          cacheHitRatio,
+          ramUsagePercent: Math.min(95, Math.round(activeCpuUsage * 0.6 + 30)),
+          ramUsedMb: Math.round(16384 * ((activeCpuUsage * 0.6 + 30) / 100))
+        }
+      }
+    : null;
+
+  const activeServerStuckQueries = stuckQueries.map((q, idx) => ({
+    ...q,
+    datname: idx === 0 && activeDb ? activeDb.datname : q.datname || activeDb?.datname || 'production_db',
+    client_addr: activeServerObject?.host ? `${activeServerObject.host.split('.')[0]}.${10 + idx}` : q.client_addr
+  }));
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
+      {/* Navigation Header */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isLive={isLive}
+        setIsLive={setIsLive}
+        refreshIntervalMs={refreshIntervalMs}
+        setRefreshIntervalMs={setRefreshIntervalMs}
+        onOpenExportModal={() => setShowExportModal(true)}
+        onOpenAlertModal={() => setShowAlertModal(true)}
+        onOpenConnectionModal={() => setShowConnectionModal(true)}
+        activeAlertCount={activeAlerts.length}
+        selectedServerHost={activeServerObject?.host || 'pg-prod-us1.internal.cloud'}
+        selectedDatabaseName={activeDb?.datname || selectedDatabaseName}
+      />
+
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Context Selector Bar for Detail Tabs */}
+        {activeTab !== 'dashboard' && activeTab !== 'fleet' && activeServerObject && (
+          <SelectedServerContextBar
+            servers={fleetServers}
+            selectedServerId={activeServerObject.id}
+            selectedDatabaseName={activeDb?.datname || selectedDatabaseName}
+            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
+          />
+        )}
+
+        {/* TAB 0: FROTA DE SERVIDORES & BANCOS (MENU LATERAL) */}
+        {activeTab === 'fleet' && (
+          <ServerSidebarDashboard
+            servers={fleetServers}
+            selectedServerId={selectedServerId}
+            selectedDatabaseName={selectedDatabaseName}
+            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
+            metrics={metrics}
+            stuckQueries={stuckQueries}
+            activeLocks={activeLocks}
+            onKillPid={handleKillPid}
+            onAnalyzeWithAi={handleAnalyzeWithAi}
+            killingPid={killingPid}
+            onUpdateServer={handleUpdateServer}
+            onDeleteServer={handleDeleteServer}
+            onAddServer={handleAddServer}
+          />
+        )}
+
+        {/* TAB 0: GLOBAL DASHBOARD OVERVIEW */}
+        {activeTab === 'dashboard' && (
+          <GlobalDashboardView
+            servers={fleetServers}
+            activeAlerts={activeAlerts}
+            metrics={metrics}
+            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSwitchTab={(tab) => setActiveTab(tab)}
+          />
+        )}
+
+        {/* TAB 1: DATABASE SPECIFIC METRICS */}
+        {activeTab === 'metrics' && activeServerMetrics && (
+          <div className="space-y-6">
+            {/* Top KPI Metric Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricCard
+                title="Latência Média de Consultas"
+                value={formatMs(activeServerMetrics.currentLatency.avgLatencyMs)}
+                subtitle={`P95: ${formatMs(activeServerMetrics.currentLatency.p95LatencyMs)}`}
+                icon={Clock}
+                status={activeServerMetrics.currentLatency.avgLatencyMs > 10 ? 'warning' : 'normal'}
+                details={[
+                  { label: 'Leitura', value: `${formatMs(activeServerMetrics.currentLatency.readLatencyMs)}` },
+                  { label: 'Escrita', value: `${formatMs(activeServerMetrics.currentLatency.writeLatencyMs)}` }
+                ]}
+              />
+
+              <MetricCard
+                title="Uso de CPU do Servidor"
+                value={`${activeServerMetrics.currentCpu.usagePercent}%`}
+                subtitle={`Servidor: ${activeServerObject?.name || 'PostgreSQL'}`}
+                icon={Cpu}
+                status={activeServerMetrics.currentCpu.usagePercent > 80 ? 'critical' : 'normal'}
+                progressPercent={activeServerMetrics.currentCpu.usagePercent}
+                details={[
+                  { label: 'Usuário', value: `${activeServerMetrics.currentCpu.userPercent}%` },
+                  { label: 'Sistema', value: `${activeServerMetrics.currentCpu.systemPercent}%` }
+                ]}
+              />
+
+              <MetricCard
+                title="Conexões Ativas"
+                value={activeServerMetrics.currentResources.activeConnections}
+                unit={`/ ${activeServerMetrics.currentResources.maxConnections}`}
+                subtitle={`Banco: ${activeDb?.datname || 'pg_stat'}`}
+                icon={Users}
+                status={activeServerMetrics.currentResources.activeConnections > 150 ? 'warning' : 'normal'}
+                progressPercent={Math.round((activeServerMetrics.currentResources.activeConnections / activeServerMetrics.currentResources.maxConnections) * 100)}
+                details={[
+                  { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` },
+                  { label: 'Limit Max', value: `${activeServerMetrics.currentResources.maxConnections}` }
+                ]}
+              />
+
+              <MetricCard
+                title="Hit Ratio do Cache Shared Buffers"
+                value={`${activeServerMetrics.currentResources.cacheHitRatio}%`}
+                subtitle="Eficiência de Memória RAM"
+                icon={Activity}
+                status={activeServerMetrics.currentResources.cacheHitRatio < 98 ? 'warning' : 'normal'}
+                progressPercent={activeServerMetrics.currentResources.cacheHitRatio}
+                details={[
+                  { label: 'Uso de RAM', value: `${activeServerMetrics.currentResources.ramUsagePercent}%` },
+                  { label: 'RAM Usada', value: `${(activeServerMetrics.currentResources.ramUsedMb / 1024).toFixed(1)} GB` }
+                ]}
+              />
+            </div>
+
+            {/* Realtime Performance Charts */}
+            <MetricsCharts
+              latencyHistory={activeServerMetrics.latencyHistory}
+              cpuHistory={activeServerMetrics.cpuHistory}
+              currentCpu={activeServerMetrics.currentCpu}
+              currentLatency={activeServerMetrics.currentLatency}
+            />
+
+            {/* Embedded Quick Stuck Queries Table */}
+            <StuckQueriesTable
+              stuckQueries={activeServerStuckQueries}
+              onKillPid={handleKillPid}
+              onAnalyzeWithAi={handleAnalyzeWithAi}
+              killingPid={killingPid}
+            />
+          </div>
+        )}
+
+        {/* TAB 2: STUCK QUERIES AND LOCKS */}
+        {activeTab === 'stuck_locks' && (
+          <div className="space-y-6">
+            <StuckQueriesTable
+              stuckQueries={activeServerStuckQueries}
+              onKillPid={handleKillPid}
+              onAnalyzeWithAi={handleAnalyzeWithAi}
+              killingPid={killingPid}
+            />
+
+            <ActiveLocksView activeLocks={activeLocks} />
+          </div>
+        )}
+
+        {/* TAB 3: FILE LOCATIONS & SYSTEM CONFIG */}
+        {activeTab === 'config' && sysConfig && (
+          <ConfigViewer
+            config={sysConfig}
+            sqlQuery={sqlConfigQuery}
+            server={activeServerObject}
+            databaseName={activeDb?.datname || selectedDatabaseName}
+          />
+        )}
+
+        {/* TAB 4: SAÚDE E INTEGRIDADE */}
+        {activeTab === 'integrity' && integrity && (
+          <IntegrityHealthCard
+            health={integrity}
+            onRunScan={handleRunScan}
+            isScanning={isScanningIntegrity}
+            server={activeServerObject}
+            databaseName={activeDb?.datname || selectedDatabaseName}
+          />
+        )}
+
+        {/* TAB 5: BACKUPS */}
+        {activeTab === 'backups' && backupOverview && (
+          <BackupTracker
+            backupOverview={backupOverview}
+            onTriggerBackup={handleTriggerBackup}
+            isTriggering={isTriggeringBackup}
+            server={activeServerObject}
+            databaseName={activeDb?.datname || selectedDatabaseName}
+          />
+        )}
+      </main>
+
+      {/* MODALS */}
+      {showExportModal && (
+        <ExportReportModal
+          onExportCSV={handleExportCSV}
+          onExportPDF={handleExportPDF}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {showAlertModal && (
+        <AlertRulesManager
+          rules={alertRules}
+          activeAlerts={activeAlerts}
+          onAddRule={handleAddRule}
+          onToggleRule={handleToggleRule}
+          onClose={() => setShowAlertModal(false)}
+          onAcknowledgeAlert={(id) => {
+            setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
+          }}
+        />
+      )}
+
+      {showConnectionModal && (
+        <ConnectionSettingsModal
+          onClose={() => setShowConnectionModal(false)}
+          onSaveServer={handleSaveConnectionServer}
+        />
+      )}
+
+      {selectedAiQuery && (
+        <AiQueryModal
+          query={selectedAiQuery}
+          analysis={aiAnalysisResult}
+          isLoading={isAnalyzingAi}
+          onClose={() => setSelectedAiQuery(null)}
+        />
+      )}
+    </div>
+  );
+}
