@@ -18,7 +18,16 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
   onSelectDatabase
 }) => {
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
-  if (!activeServer) return null;
+  if (!activeServer) {
+    return (
+      <div className="bg-slate-900/90 border border-amber-800/60 rounded-2xl p-4 shadow-md flex items-center justify-between text-xs text-amber-200">
+        <div className="flex items-center space-x-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span>Nenhum servidor cadastrado na frota. Adicione um novo servidor para monitorar métricas.</span>
+        </div>
+      </div>
+    );
+  }
 
   const activeDb =
     activeServer.databases.find((d) => d.datname === selectedDatabaseName) || activeServer.databases[0];

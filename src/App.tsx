@@ -30,7 +30,7 @@ import { exportToPDF } from './utils/pdfExporter';
 import { analyzeQueryWithAI } from './services/aiDiagnosticService';
 import { formatMs } from './utils/formatters';
 
-import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -392,60 +392,65 @@ export default function App() {
   };
 
   const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
-  const activeDb =
-    activeServerObject?.databases.find((d) => d.datname === selectedDatabaseName) ||
-    activeServerObject?.databases[0];
+  const activeDb = activeServerObject
+    ? activeServerObject.databases.find((d) => d.datname === selectedDatabaseName) || activeServerObject.databases[0]
+    : undefined;
 
-  const activeCpuUsage = activeServerObject
-    ? Math.min(99, Math.max(2, Math.round(activeServerObject.cpuUsagePercent)))
-    : metrics?.currentCpu.usagePercent || 25;
-
-  const activeLatencyMs = activeServerObject
-    ? parseFloat(activeServerObject.avgLatencyMs.toFixed(2))
-    : metrics?.currentLatency.avgLatencyMs || 2.1;
-
-  const activeConnections = activeDb
-    ? activeDb.activeConnections
-    : activeServerObject?.totalActiveConnections || 45;
-
-  const maxConnections = activeDb ? activeDb.maxConnections : 200;
-  const tps = activeDb ? activeDb.tps : 1200;
-  const cacheHitRatio = activeDb ? activeDb.cacheHitRatio : 99.8;
-
-  const activeServerMetrics = metrics
+  const activeServerMetrics = activeServerObject && metrics
     ? {
         ...metrics,
         currentCpu: {
           ...metrics.currentCpu,
-          usagePercent: activeCpuUsage,
-          userPercent: parseFloat((activeCpuUsage * 0.75).toFixed(1)),
-          systemPercent: parseFloat((activeCpuUsage * 0.2).toFixed(1)),
-          iowaitPercent: parseFloat((activeCpuUsage * 0.05).toFixed(1))
+          usagePercent: Math.min(99, Math.max(2, Math.round(activeServerObject.cpuUsagePercent))),
+          userPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.75).toFixed(1)),
+          systemPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.2).toFixed(1)),
+          iowaitPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.05).toFixed(1))
         },
         currentLatency: {
           ...metrics.currentLatency,
-          avgLatencyMs: activeLatencyMs,
-          readLatencyMs: parseFloat((activeLatencyMs * 0.75).toFixed(2)),
-          writeLatencyMs: parseFloat((activeLatencyMs * 1.35).toFixed(2)),
-          p95LatencyMs: parseFloat((activeLatencyMs * 2.1).toFixed(2))
+          avgLatencyMs: parseFloat(activeServerObject.avgLatencyMs.toFixed(2)),
+          readLatencyMs: parseFloat((activeServerObject.avgLatencyMs * 0.75).toFixed(2)),
+          writeLatencyMs: parseFloat((activeServerObject.avgLatencyMs * 1.35).toFixed(2)),
+          p95LatencyMs: parseFloat((activeServerObject.avgLatencyMs * 2.1).toFixed(2))
         },
         currentResources: {
           ...metrics.currentResources,
-          activeConnections,
-          maxConnections,
-          tps,
-          cacheHitRatio,
-          ramUsagePercent: Math.min(95, Math.round(activeCpuUsage * 0.6 + 30)),
-          ramUsedMb: Math.round(16384 * ((activeCpuUsage * 0.6 + 30) / 100))
+          activeConnections: activeDb ? activeDb.activeConnections : activeServerObject.totalActiveConnections,
+          maxConnections: activeDb ? activeDb.maxConnections : 200,
+          tps: activeDb ? activeDb.tps : 0,
+          cacheHitRatio: activeDb ? activeDb.cacheHitRatio : 99.8,
+          ramUsagePercent: Math.min(95, Math.round(activeServerObject.cpuUsagePercent * 0.6 + 30)),
+          ramUsedMb: Math.round(16384 * ((activeServerObject.cpuUsagePercent * 0.6 + 30) / 100))
         }
       }
     : null;
 
-  const activeServerStuckQueries = stuckQueries.map((q, idx) => ({
-    ...q,
-    datname: idx === 0 && activeDb ? activeDb.datname : q.datname || activeDb?.datname || 'production_db',
-    client_addr: activeServerObject?.host ? `${activeServerObject.host.split('.')[0]}.${10 + idx}` : q.client_addr
-  }));
+  const activeServerStuckQueries = activeServerObject
+    ? stuckQueries.map((q, idx) => ({
+        ...q,
+        datname: idx === 0 && activeDb ? activeDb.datname : q.datname || activeDb?.datname || 'db',
+        client_addr: `${activeServerObject.host.split('.')[0]}.${10 + idx}`
+      }))
+    : [];
+
+  const renderEmptyServerState = () => (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center space-y-4 max-w-xl mx-auto my-8 shadow-lg">
+      <div className="p-3 bg-slate-800 rounded-2xl w-12 h-12 flex items-center justify-center mx-auto text-slate-400">
+        <Server className="w-6 h-6 text-cyan-400" />
+      </div>
+      <h3 className="text-base font-bold text-white">Nenhum Servidor Selecionado</h3>
+      <p className="text-xs text-slate-400">
+        Sua frota de servidores está vazia ou nenhum servidor foi selecionado. Adicione um novo servidor na aba Frota para monitorar métricas, queries e logs.
+      </p>
+      <button
+        onClick={() => setShowConnectionModal(true)}
+        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold text-xs rounded-xl shadow hover:from-blue-500 hover:to-cyan-500 transition-all inline-flex items-center space-x-2 cursor-pointer"
+      >
+        <Plus className="w-4 h-4" />
+        <span>Adicionar Novo Servidor</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
@@ -461,8 +466,8 @@ export default function App() {
         onOpenAlertModal={() => setShowAlertModal(true)}
         onOpenConnectionModal={() => setShowConnectionModal(true)}
         activeAlertCount={activeAlerts.length}
-        selectedServerHost={activeServerObject?.host || 'pg-prod-us1.internal.cloud'}
-        selectedDatabaseName={activeDb?.datname || selectedDatabaseName}
+        selectedServerHost={activeServerObject ? activeServerObject.host : 'Nenhum servidor'}
+        selectedDatabaseName={activeDb ? activeDb.datname : 'Nenhum banco'}
       />
 
       {/* Main Container */}
@@ -510,125 +515,145 @@ export default function App() {
         )}
 
         {/* TAB 1: DATABASE SPECIFIC METRICS */}
-        {activeTab === 'metrics' && activeServerMetrics && (
-          <div className="space-y-6">
-            {/* Top KPI Metric Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricCard
-                title="Latência Média de Consultas"
-                value={formatMs(activeServerMetrics.currentLatency.avgLatencyMs)}
-                subtitle={`P95: ${formatMs(activeServerMetrics.currentLatency.p95LatencyMs)}`}
-                icon={Clock}
-                status={activeServerMetrics.currentLatency.avgLatencyMs > 10 ? 'warning' : 'normal'}
-                details={[
-                  { label: 'Leitura', value: `${formatMs(activeServerMetrics.currentLatency.readLatencyMs)}` },
-                  { label: 'Escrita', value: `${formatMs(activeServerMetrics.currentLatency.writeLatencyMs)}` }
-                ]}
+        {activeTab === 'metrics' && (
+          activeServerMetrics ? (
+            <div className="space-y-6">
+              {/* Top KPI Metric Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Latência Média de Consultas"
+                  value={formatMs(activeServerMetrics.currentLatency.avgLatencyMs)}
+                  subtitle={`P95: ${formatMs(activeServerMetrics.currentLatency.p95LatencyMs)}`}
+                  icon={Clock}
+                  status={activeServerMetrics.currentLatency.avgLatencyMs > 10 ? 'warning' : 'normal'}
+                  details={[
+                    { label: 'Leitura', value: `${formatMs(activeServerMetrics.currentLatency.readLatencyMs)}` },
+                    { label: 'Escrita', value: `${formatMs(activeServerMetrics.currentLatency.writeLatencyMs)}` }
+                  ]}
+                />
+
+                <MetricCard
+                  title="Uso de CPU do Servidor"
+                  value={`${activeServerMetrics.currentCpu.usagePercent}%`}
+                  subtitle={`Servidor: ${activeServerObject?.name || 'PostgreSQL'}`}
+                  icon={Cpu}
+                  status={activeServerMetrics.currentCpu.usagePercent > 80 ? 'critical' : 'normal'}
+                  progressPercent={activeServerMetrics.currentCpu.usagePercent}
+                  details={[
+                    { label: 'Usuário', value: `${activeServerMetrics.currentCpu.userPercent}%` },
+                    { label: 'Sistema', value: `${activeServerMetrics.currentCpu.systemPercent}%` }
+                  ]}
+                />
+
+                <MetricCard
+                  title="Conexões Ativas"
+                  value={activeServerMetrics.currentResources.activeConnections}
+                  unit={`/ ${activeServerMetrics.currentResources.maxConnections}`}
+                  subtitle={`Banco: ${activeDb?.datname || 'pg_stat'}`}
+                  icon={Users}
+                  status={activeServerMetrics.currentResources.activeConnections > 150 ? 'warning' : 'normal'}
+                  progressPercent={Math.round((activeServerMetrics.currentResources.activeConnections / activeServerMetrics.currentResources.maxConnections) * 100)}
+                  details={[
+                    { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` },
+                    { label: 'Limit Max', value: `${activeServerMetrics.currentResources.maxConnections}` }
+                  ]}
+                />
+
+                <MetricCard
+                  title="Hit Ratio do Cache Shared Buffers"
+                  value={`${activeServerMetrics.currentResources.cacheHitRatio}%`}
+                  subtitle="Eficiência de Memória RAM"
+                  icon={Activity}
+                  status={activeServerMetrics.currentResources.cacheHitRatio < 98 ? 'warning' : 'normal'}
+                  progressPercent={activeServerMetrics.currentResources.cacheHitRatio}
+                  details={[
+                    { label: 'Uso de RAM', value: `${activeServerMetrics.currentResources.ramUsagePercent}%` },
+                    { label: 'RAM Usada', value: `${(activeServerMetrics.currentResources.ramUsedMb / 1024).toFixed(1)} GB` }
+                  ]}
+                />
+              </div>
+
+              {/* Realtime Performance Charts */}
+              <MetricsCharts
+                latencyHistory={activeServerMetrics.latencyHistory}
+                cpuHistory={activeServerMetrics.cpuHistory}
+                currentCpu={activeServerMetrics.currentCpu}
+                currentLatency={activeServerMetrics.currentLatency}
               />
 
-              <MetricCard
-                title="Uso de CPU do Servidor"
-                value={`${activeServerMetrics.currentCpu.usagePercent}%`}
-                subtitle={`Servidor: ${activeServerObject?.name || 'PostgreSQL'}`}
-                icon={Cpu}
-                status={activeServerMetrics.currentCpu.usagePercent > 80 ? 'critical' : 'normal'}
-                progressPercent={activeServerMetrics.currentCpu.usagePercent}
-                details={[
-                  { label: 'Usuário', value: `${activeServerMetrics.currentCpu.userPercent}%` },
-                  { label: 'Sistema', value: `${activeServerMetrics.currentCpu.systemPercent}%` }
-                ]}
-              />
-
-              <MetricCard
-                title="Conexões Ativas"
-                value={activeServerMetrics.currentResources.activeConnections}
-                unit={`/ ${activeServerMetrics.currentResources.maxConnections}`}
-                subtitle={`Banco: ${activeDb?.datname || 'pg_stat'}`}
-                icon={Users}
-                status={activeServerMetrics.currentResources.activeConnections > 150 ? 'warning' : 'normal'}
-                progressPercent={Math.round((activeServerMetrics.currentResources.activeConnections / activeServerMetrics.currentResources.maxConnections) * 100)}
-                details={[
-                  { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` },
-                  { label: 'Limit Max', value: `${activeServerMetrics.currentResources.maxConnections}` }
-                ]}
-              />
-
-              <MetricCard
-                title="Hit Ratio do Cache Shared Buffers"
-                value={`${activeServerMetrics.currentResources.cacheHitRatio}%`}
-                subtitle="Eficiência de Memória RAM"
-                icon={Activity}
-                status={activeServerMetrics.currentResources.cacheHitRatio < 98 ? 'warning' : 'normal'}
-                progressPercent={activeServerMetrics.currentResources.cacheHitRatio}
-                details={[
-                  { label: 'Uso de RAM', value: `${activeServerMetrics.currentResources.ramUsagePercent}%` },
-                  { label: 'RAM Usada', value: `${(activeServerMetrics.currentResources.ramUsedMb / 1024).toFixed(1)} GB` }
-                ]}
+              {/* Embedded Quick Stuck Queries Table */}
+              <StuckQueriesTable
+                stuckQueries={activeServerStuckQueries}
+                onKillPid={handleKillPid}
+                onAnalyzeWithAi={handleAnalyzeWithAi}
+                killingPid={killingPid}
               />
             </div>
-
-            {/* Realtime Performance Charts */}
-            <MetricsCharts
-              latencyHistory={activeServerMetrics.latencyHistory}
-              cpuHistory={activeServerMetrics.cpuHistory}
-              currentCpu={activeServerMetrics.currentCpu}
-              currentLatency={activeServerMetrics.currentLatency}
-            />
-
-            {/* Embedded Quick Stuck Queries Table */}
-            <StuckQueriesTable
-              stuckQueries={activeServerStuckQueries}
-              onKillPid={handleKillPid}
-              onAnalyzeWithAi={handleAnalyzeWithAi}
-              killingPid={killingPid}
-            />
-          </div>
+          ) : (
+            renderEmptyServerState()
+          )
         )}
 
         {/* TAB 2: STUCK QUERIES AND LOCKS */}
         {activeTab === 'stuck_locks' && (
-          <div className="space-y-6">
-            <StuckQueriesTable
-              stuckQueries={activeServerStuckQueries}
-              onKillPid={handleKillPid}
-              onAnalyzeWithAi={handleAnalyzeWithAi}
-              killingPid={killingPid}
-            />
+          activeServerObject ? (
+            <div className="space-y-6">
+              <StuckQueriesTable
+                stuckQueries={activeServerStuckQueries}
+                onKillPid={handleKillPid}
+                onAnalyzeWithAi={handleAnalyzeWithAi}
+                killingPid={killingPid}
+              />
 
-            <ActiveLocksView activeLocks={activeLocks} />
-          </div>
+              <ActiveLocksView activeLocks={activeLocks} />
+            </div>
+          ) : (
+            renderEmptyServerState()
+          )
         )}
 
         {/* TAB 3: FILE LOCATIONS & SYSTEM CONFIG */}
         {activeTab === 'config' && sysConfig && (
-          <ConfigViewer
-            config={sysConfig}
-            sqlQuery={sqlConfigQuery}
-            server={activeServerObject}
-            databaseName={activeDb?.datname || selectedDatabaseName}
-          />
+          activeServerObject ? (
+            <ConfigViewer
+              config={sysConfig}
+              sqlQuery={sqlConfigQuery}
+              server={activeServerObject}
+              databaseName={activeDb?.datname || selectedDatabaseName}
+            />
+          ) : (
+            renderEmptyServerState()
+          )
         )}
 
         {/* TAB 4: SAÚDE E INTEGRIDADE */}
         {activeTab === 'integrity' && integrity && (
-          <IntegrityHealthCard
-            health={integrity}
-            onRunScan={handleRunScan}
-            isScanning={isScanningIntegrity}
-            server={activeServerObject}
-            databaseName={activeDb?.datname || selectedDatabaseName}
-          />
+          activeServerObject ? (
+            <IntegrityHealthCard
+              health={integrity}
+              onRunScan={handleRunScan}
+              isScanning={isScanningIntegrity}
+              server={activeServerObject}
+              databaseName={activeDb?.datname || selectedDatabaseName}
+            />
+          ) : (
+            renderEmptyServerState()
+          )
         )}
 
         {/* TAB 5: BACKUPS */}
         {activeTab === 'backups' && backupOverview && (
-          <BackupTracker
-            backupOverview={backupOverview}
-            onTriggerBackup={handleTriggerBackup}
-            isTriggering={isTriggeringBackup}
-            server={activeServerObject}
-            databaseName={activeDb?.datname || selectedDatabaseName}
-          />
+          activeServerObject ? (
+            <BackupTracker
+              backupOverview={backupOverview}
+              onTriggerBackup={handleTriggerBackup}
+              isTriggering={isTriggeringBackup}
+              server={activeServerObject}
+              databaseName={activeDb?.datname || selectedDatabaseName}
+            />
+          ) : (
+            renderEmptyServerState()
+          )
         )}
       </main>
 
