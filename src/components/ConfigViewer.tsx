@@ -82,6 +82,26 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
 
   return (
     <div className="space-y-6">
+      {/* Server & PG Version Banner */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <Server className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-bold text-white">{server ? server.name : 'Servidor PostgreSQL'}</h2>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                {server?.pgVersion || config.version}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 font-mono mt-0.5">
+              Host: <span className="text-slate-200">{server ? `${server.host}:${server.port}` : '127.0.0.1:5432'}</span> | Banco Ativo: <span className="text-emerald-400 font-bold">{databaseName || 'postgres'}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Query Banner Box */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-3">

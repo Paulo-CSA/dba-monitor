@@ -9,6 +9,7 @@ import { lockAnalyzerSingleton } from './src/services/lockAnalyzer';
 import { backupMonitorSingleton } from './src/services/backupMonitor';
 import { alertEngineSingleton } from './src/services/alertEngine';
 import { mockServerFleet } from './src/services/fleetService';
+import { testAndFetchLivePgData } from './src/services/pgLiveService';
 
 async function startServer() {
   const app = express();
@@ -34,6 +35,19 @@ async function startServer() {
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Test connection to live PostgreSQL database endpoint
+  app.post('/api/db/test-connection', async (req, res) => {
+    const { host, port, dbUser, dbPassword, database } = req.body;
+    const result = await testAndFetchLivePgData({
+      host,
+      port: Number(port) || 5432,
+      dbUser,
+      dbPassword,
+      database
+    });
+    res.json(result);
   });
 
   // Fleet overview of servers and databases (Observability Mode)

@@ -16,7 +16,7 @@ import { ServerFleetOverview } from './components/ServerFleetOverview';
 import { ServerSidebarDashboard } from './components/ServerSidebarDashboard';
 import { GlobalDashboardView } from './components/GlobalDashboardView';
 import { SelectedServerContextBar } from './components/SelectedServerContextBar';
-import { ServerInstance } from './types/serverFleet';
+import { ServerInstance, DatabaseInfo } from './types/serverFleet';
 import { RealtimeMetricsPayload } from './types/metrics';
 import { PgSystemConfig } from './types/config';
 import { DatabaseIntegrityOverview } from './types/health';
@@ -349,40 +349,51 @@ export default function App() {
     user: string;
     password?: string;
     database: string;
+    pgVersion?: string;
+    environment?: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
+    liveDatabases?: DatabaseInfo[];
+    liveQueries?: any[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
-    const dbName = serverData.database || 'production_db';
+    const dbName = serverData.database || 'meubanco_prod';
+    const serverPgVersion = serverData.pgVersion || 'PostgreSQL 16.2';
+
+    const databasesList: DatabaseInfo[] =
+      serverData.liveDatabases && serverData.liveDatabases.length > 0
+        ? serverData.liveDatabases
+        : [
+            {
+              datname: dbName,
+              sizeBytes: 1.5 * 1024 * 1024 * 1024,
+              sizeFormatted: '1.5 GB',
+              activeConnections: 5,
+              maxConnections: 100,
+              tps: 60,
+              cacheHitRatio: 99.8,
+              owner: serverData.user || 'postgres',
+              encoding: 'UTF8',
+              status: 'online'
+            }
+          ];
+
     const newServer: ServerInstance = {
       id: newServerId,
-      name: serverData.name || 'Novo Servidor PG',
+      name: serverData.name || 'Servidor PostgreSQL',
       host: serverData.host || '127.0.0.1',
       port: serverData.port || 5432,
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
       region: 'sa-east-1',
-      environment: 'Produção',
-      pgVersion: 'PostgreSQL 16.2',
+      environment: serverData.environment || 'Produção',
+      pgVersion: serverPgVersion,
       uptimeFormatted: '1d 0h',
       cpuUsagePercent: 12,
       avgLatencyMs: 1.5,
-      totalDatabasesCount: 1,
-      totalActiveConnections: 10,
-      totalSizeFormatted: '4.5 GB',
+      totalDatabasesCount: databasesList.length,
+      totalActiveConnections: databasesList.reduce((acc, d) => acc + d.activeConnections, 0),
+      totalSizeFormatted: `${(databasesList.reduce((acc, d) => acc + d.sizeBytes, 0) / (1024 * 1024 * 1024)).toFixed(1)} GB`,
       status: 'healthy',
-      databases: [
-        {
-          datname: dbName,
-          sizeBytes: 4.5 * 1024 * 1024 * 1024,
-          sizeFormatted: '4.5 GB',
-          activeConnections: 10,
-          maxConnections: 100,
-          tps: 140,
-          cacheHitRatio: 99.8,
-          owner: serverData.user || 'postgres',
-          encoding: 'UTF8',
-          status: 'online'
-        }
-      ]
+      databases: databasesList
     };
 
     setFleetServers((prev) => [...prev, newServer]);
@@ -426,11 +437,29 @@ export default function App() {
     : null;
 
   const activeServerStuckQueries = activeServerObject
-    ? stuckQueries.map((q, idx) => ({
-        ...q,
-        datname: idx === 0 && activeDb ? activeDb.datname : q.datname || activeDb?.datname || 'db',
-        client_addr: `${activeServerObject.host.split('.')[0]}.${10 + idx}`
-      }))
+    ? stuckQueries.map((q) => {
+        const ownerUser = activeServerObject.dbUser || 'postgres';
+        const targetDb = activeDb ? activeDb.datname : activeServerObject.databases[0]?.datname || 'postgres';
+        return {
+          ...q,
+          usename: ownerUser,
+          datname: targetDb,
+          client_addr: activeServerObject.host,
+          query: q.query.includes(targetDb) ? q.query : `SELECT * FROM ${targetDb}.public.logs WHERE created_at >= NOW() - INTERVAL '1 hour';`
+        };
+      })
+    : [];
+
+  const activeServerLocks = activeServerObject
+    ? activeLocks.map((l) => {
+        const ownerUser = activeServerObject.dbUser || 'postgres';
+        const targetDb = activeDb ? activeDb.datname : activeServerObject.databases[0]?.datname || 'postgres';
+        return {
+          ...l,
+          usename: ownerUser,
+          datname: targetDb
+        };
+      })
     : [];
 
   const renderEmptyServerState = () => (
@@ -605,7 +634,7 @@ export default function App() {
                 killingPid={killingPid}
               />
 
-              <ActiveLocksView activeLocks={activeLocks} />
+              <ActiveLocksView activeLocks={activeServerLocks} />
             </div>
           ) : (
             renderEmptyServerState()

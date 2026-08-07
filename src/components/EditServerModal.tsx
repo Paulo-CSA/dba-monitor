@@ -34,16 +34,45 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         environment: server.environment,
         pgVersion: server.pgVersion
       });
+      setDatabaseNames(server.databases.map((d) => d.datname).join(', '));
       setShowConfirmDelete(false);
       setShowPassword(false);
     }
   }, [server]);
+
+  const [databaseNames, setDatabaseNames] = useState('');
 
   if (!isOpen || !server) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!server) return;
+
+    // Parse entered database names comma-separated
+    const parsedDbs = databaseNames
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const newDatabases =
+      parsedDbs.length > 0
+        ? parsedDbs.map((datname) => {
+            const existing = server.databases.find((d) => d.datname === datname);
+            if (existing) return existing;
+            return {
+              datname,
+              sizeBytes: 1024 * 1024 * 1024,
+              sizeFormatted: '1.0 GB',
+              activeConnections: 5,
+              maxConnections: 100,
+              tps: 50,
+              cacheHitRatio: 99.5,
+              owner: formData.dbUser || 'postgres',
+              encoding: 'UTF8',
+              status: 'online' as const
+            };
+          })
+        : server.databases;
 
     const updated: ServerInstance = {
       ...server,
@@ -54,7 +83,9 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
       dbPassword: formData.dbPassword || '',
       region: formData.region || server.region,
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
-      pgVersion: formData.pgVersion || server.pgVersion
+      pgVersion: formData.pgVersion || server.pgVersion,
+      totalDatabasesCount: newDatabases.length,
+      databases: newDatabases
     };
 
     onSave(updated);
@@ -174,6 +205,37 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Versão do PostgreSQL e Bancos Existentes */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                Versão do PostgreSQL
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.pgVersion || ''}
+                onChange={(e) => setFormData({ ...formData, pgVersion: e.target.value })}
+                placeholder="Ex: PostgreSQL 15.4 ou PostgreSQL 16.2"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-200 mb-1">
+                Bancos de Dados no Servidor (separados por vírgula)
+              </label>
+              <input
+                type="text"
+                required
+                value={databaseNames}
+                onChange={(e) => setDatabaseNames(e.target.value)}
+                placeholder="Ex: meubanco_prod, postgres"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+              />
             </div>
           </div>
 
