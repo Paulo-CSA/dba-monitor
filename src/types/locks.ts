@@ -4,7 +4,7 @@ export interface StuckQuery {
   datname: string;
   client_addr: string;
   application_name: string;
-  state: 'active' | 'idle in transaction' | 'idle in transaction (aborted)' | 'fastpath function call';
+  state: 'active' | 'idle' | 'idle in transaction' | 'idle in transaction (aborted)' | 'fastpath function call' | string;
   query: string;
   durationSeconds: number;
   wait_event_type: string | null;

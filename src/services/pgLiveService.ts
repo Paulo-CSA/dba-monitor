@@ -88,7 +88,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       });
     }
 
-    // 3. Fetch active queries / sessions from pg_stat_activity
+    // 3. Fetch active queries / sessions from pg_stat_activity (filtering by datname = 'NOME_DO_BANCO')
     const activityQuery = `
       SELECT 
         pid,
@@ -104,6 +104,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       FROM pg_stat_activity
       WHERE pid != pg_backend_pid()
         AND query NOT LIKE '%pg_stat_activity%'
+        ${params.database ? `AND datname = '${params.database.replace(/'/g, "''")}'` : ''}
       ORDER BY duration_seconds DESC
       LIMIT 50;
     `;
