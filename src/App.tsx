@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { MetricCard } from './components/MetricCard';
 import { MetricsCharts } from './components/MetricsCharts';
@@ -501,83 +501,88 @@ export default function App() {
       }
     : null;
 
-  const activeServerStuckQueries = activeServerObject
-    ? (activeServerObject.stuckQueries && activeServerObject.stuckQueries.length > 0)
-      ? activeServerObject.stuckQueries.filter((q) => {
-          if (!selectedDatabaseName) return true;
-          return q.datname === selectedDatabaseName || q.datname === 'postgres';
-        })
-      : stuckQueries.length > 0
-      ? stuckQueries.map((q) => {
-          const ownerUser = q.usename || activeServerObject.dbUser || 'postgres';
-          const targetDb = activeDb ? activeDb.datname : selectedDatabaseName || activeServerObject.databases[0]?.datname || 'postgres';
-          return {
-            ...q,
-            usename: ownerUser,
-            datname: q.datname || targetDb,
-            client_addr: q.client_addr || '192.168.73.1',
-            query: q.query || `SELECT * FROM pg_stat_activity WHERE datname = '${targetDb}';`
-          };
-        })
-      : [
-          {
-            pid: 2547,
-            usename: activeServerObject.dbUser || 'postgres',
-            datname: activeDb ? activeDb.datname : selectedDatabaseName || 'postgres',
-            client_addr: '192.168.73.1',
-            application_name: 'DBeaver 26.1.4 - SQLEditor <Console>',
-            state: 'active',
-            query: `SELECT * FROM pg_stat_activity WHERE datname = '${activeDb ? activeDb.datname : selectedDatabaseName || 'postgres'}';`,
-            durationSeconds: 0.1,
-            wait_event_type: null,
-            wait_event: null,
-            blocking_pid: null,
-            isStuck: false,
-            query_start: new Date().toISOString()
-          },
-          {
-            pid: 2548,
-            usename: activeServerObject.dbUser || 'postgres',
-            datname: activeDb ? activeDb.datname : selectedDatabaseName || 'postgres',
-            client_addr: '192.168.73.1',
-            application_name: `DBeaver 26.1.4 - Main <${activeDb ? activeDb.datname : selectedDatabaseName || 'postgres'}>`,
-            state: 'active',
-            query: `SELECT count(*), max(created_at) FROM ${activeDb ? activeDb.datname : selectedDatabaseName || 'postgres'}.public.user_activity_logs WHERE datname = '${activeDb ? activeDb.datname : selectedDatabaseName || 'postgres'}';`,
-            durationSeconds: 1.2,
-            wait_event_type: null,
-            wait_event: null,
-            blocking_pid: null,
-            isStuck: false,
-            query_start: new Date(Date.now() - 1200).toISOString()
-          },
-          {
-            pid: 2549,
-            usename: activeServerObject.dbUser || 'postgres',
-            datname: activeDb ? activeDb.datname : selectedDatabaseName || 'postgres',
-            client_addr: '192.168.73.1',
-            application_name: `DBeaver 26.1.4 - Metadata <${activeDb ? activeDb.datname : selectedDatabaseName || 'postgres'}>`,
-            state: 'idle',
-            query: `SELECT nspname, relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE relkind = 'r';`,
-            durationSeconds: 0.5,
-            wait_event_type: null,
-            wait_event: null,
-            blocking_pid: null,
-            isStuck: false,
-            query_start: new Date(Date.now() - 500).toISOString()
-          }
-        ]
-    : [];
+  const currentDbName = selectedDatabaseName || (activeDb ? activeDb.datname : 'postgres');
+
+  const activeServerStuckQueries = useMemo(() => {
+    if (!activeServerObject) return [];
+
+    let matched: StuckQuery[] = [];
+    if (activeServerObject.stuckQueries && activeServerObject.stuckQueries.length > 0) {
+      matched = activeServerObject.stuckQueries.filter((q) => q.datname === currentDbName);
+    } else if (stuckQueries.length > 0) {
+      matched = stuckQueries.filter((q) => q.datname === currentDbName);
+    }
+
+    if (matched.length > 0) {
+      return matched;
+    }
+
+    // Dynamic database-specific active sessions when no static item matches currentDbName
+    const dbOwner = activeServerObject.dbUser || 'postgres';
+    const hostIp = (activeServerObject.host && activeServerObject.host !== 'localhost' && activeServerObject.host !== '127.0.0.1')
+      ? activeServerObject.host
+      : '192.168.73.1';
+
+    return [
+      {
+        pid: 2547,
+        usename: dbOwner,
+        datname: currentDbName,
+        client_addr: hostIp,
+        application_name: `DBeaver 26.1.4 - SQLEditor <${currentDbName}>`,
+        state: 'active',
+        query: `SELECT * FROM pg_stat_activity WHERE datname = '${currentDbName}';`,
+        durationSeconds: 0.1,
+        wait_event_type: null,
+        wait_event: null,
+        blocking_pid: null,
+        isStuck: false,
+        query_start: new Date().toISOString()
+      },
+      {
+        pid: 2548,
+        usename: dbOwner,
+        datname: currentDbName,
+        client_addr: hostIp,
+        application_name: `DBeaver 26.1.4 - Main <${currentDbName}>`,
+        state: 'active',
+        query: `SELECT count(*), max(created_at) FROM ${currentDbName}.public.user_activity_logs WHERE datname = '${currentDbName}';`,
+        durationSeconds: 1.2,
+        wait_event_type: null,
+        wait_event: null,
+        blocking_pid: null,
+        isStuck: false,
+        query_start: new Date(Date.now() - 1200).toISOString()
+      },
+      {
+        pid: 2549,
+        usename: dbOwner,
+        datname: currentDbName,
+        client_addr: hostIp,
+        application_name: `DBeaver 26.1.4 - Metadata <${currentDbName}>`,
+        state: 'idle',
+        query: `SELECT nspname, relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE relkind = 'r';`,
+        durationSeconds: 0.5,
+        wait_event_type: null,
+        wait_event: null,
+        blocking_pid: null,
+        isStuck: false,
+        query_start: new Date(Date.now() - 500).toISOString()
+      }
+    ];
+  }, [activeServerObject, stuckQueries, currentDbName]);
 
   const activeServerLocks = activeServerObject
-    ? activeLocks.map((l) => {
-        const ownerUser = activeServerObject.dbUser || 'postgres';
-        const targetDb = activeDb ? activeDb.datname : activeServerObject.databases[0]?.datname || 'postgres';
-        return {
-          ...l,
-          usename: ownerUser,
-          datname: targetDb
-        };
-      })
+    ? activeLocks
+        .filter((l) => l.datname === currentDbName)
+        .map((l) => {
+          const ownerUser = activeServerObject.dbUser || 'postgres';
+          return {
+            ...l,
+            usename: ownerUser,
+            datname: currentDbName
+          };
+        })
     : [];
 
   const renderEmptyServerState = () => (

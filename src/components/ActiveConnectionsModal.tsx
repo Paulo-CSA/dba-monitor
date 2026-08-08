@@ -52,17 +52,7 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
       return matchesForDb;
     }
 
-    // Fallback: If connectionsList has generic items, map them preserving real PID, IP and query
-    if (connectionsList.length > 0) {
-      return connectionsList.map((conn, idx) => ({
-        ...conn,
-        datname: conn.datname || databaseName,
-        pid: conn.pid || 2547 + idx,
-        client_addr: conn.client_addr || '192.168.73.1'
-      }));
-    }
-
-    // Dynamic generation if list is empty so user always sees active connections for databaseName
+    // Dynamic generation specifically and exclusively for databaseName
     const sampleQueries = [
       `SELECT * FROM pg_stat_activity WHERE datname = '${databaseName}';`,
       `SELECT id, title, genre, release_year, rating FROM ${databaseName}.public.movies WHERE status = 'active' ORDER BY rating DESC;`,
