@@ -10,9 +10,9 @@ interface ConnectionSettingsModalProps {
     port: number;
     user: string;
     password?: string;
-    database: string;
-    pgVersion: string;
-    environment: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
+    database?: string;
+    pgVersion?: string;
+    environment?: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
   }) => void;
@@ -25,14 +25,18 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   const [serverName, setServerName] = useState('Servidor PostgreSQL');
   const [host, setHost] = useState('192.168.1.100');
   const [port, setPort] = useState(5432);
-  const [database, setDatabase] = useState('meubanco_prod');
   const [user, setUser] = useState('postgres');
   const [password, setPassword] = useState('');
-  const [pgVersion, setPgVersion] = useState('PostgreSQL 16.2');
   const [environment, setEnvironment] = useState<'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste'>('Produção');
   const [showPassword, setShowPassword] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [testStatus, setTestStatus] = useState<{ success: boolean; message: string; liveDatabases?: DatabaseInfo[]; liveQueries?: any[] } | null>(null);
+  const [testStatus, setTestStatus] = useState<{
+    success: boolean;
+    message: string;
+    pgVersion?: string;
+    liveDatabases?: DatabaseInfo[];
+    liveQueries?: any[];
+  } | null>(null);
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -46,49 +50,51 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           port,
           dbUser: user,
           dbPassword: password,
-          database
+          database: 'postgres'
         })
       });
       const data = await res.json();
       setIsTesting(false);
 
       if (data.success && data.isLive) {
-        if (data.pgVersion) {
-          setPgVersion(data.pgVersion);
-        }
         setTestStatus({
           success: true,
-          message: data.message || `Conectado com sucesso! ${data.pgVersion || ''}`,
+          message: `Conectado com sucesso! Versão obtida via SELECT version(): ${data.pgVersion || 'PostgreSQL'}`,
+          pgVersion: data.pgVersion,
           liveDatabases: data.databases,
           liveQueries: data.stuckQueries
         });
       } else {
         setTestStatus({
           success: false,
-          message: data.message || 'Sem resposta TCP direta. O servidor será configurado em modo de telemetria personalizada.'
+          message: data.message || 'Não foi possível conectar via TCP diretamente ao host informado.'
         });
       }
     } catch (err) {
       setIsTesting(false);
       setTestStatus({
         success: false,
-        message: 'Não foi possível conectar ao backend de teste.'
+        message: 'Erro ao tentar comunicação com o servidor.'
       });
     }
   };
 
   const handleSave = () => {
     if (onSaveServer) {
+      const liveDbs = testStatus?.liveDatabases;
+      const primaryDbName = liveDbs && liveDbs.length > 0 ? liveDbs[0].datname : 'postgres';
+      const versionStr = testStatus?.pgVersion || 'PostgreSQL 16.2';
+
       onSaveServer({
         name: serverName,
         host,
         port,
         user,
         password,
-        database,
-        pgVersion,
+        database: primaryDbName,
+        pgVersion: versionStr,
         environment,
-        liveDatabases: testStatus?.liveDatabases,
+        liveDatabases: liveDbs,
         liveQueries: testStatus?.liveQueries
       });
     } else {
@@ -106,8 +112,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Configurações do Servidor PostgreSQL</h2>
-              <p className="text-xs text-slate-400">IP, porta, usuário e banco de dados real</p>
+              <h2 className="text-base font-bold text-white">Adicionar Novo Servidor PostgreSQL</h2>
+              <p className="text-xs text-slate-400">Informe os dados de conexão do servidor</p>
             </div>
           </div>
 
@@ -121,9 +127,9 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
         {/* Modal Form */}
         <div className="p-5 space-y-4 text-xs">
-          {/* Nome de Exibição do Servidor */}
+          {/* Nome do Servidor */}
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">Nome do Servidor para Exibição</label>
+            <label className="block text-slate-300 font-semibold mb-1">Nome do Servidor</label>
             <input
               type="text"
               value={serverName}
@@ -133,7 +139,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             />
           </div>
 
-          {/* Host/IP e Porta */}
+          {/* Endereço IP / Host e Porta */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <label className="block text-slate-300 font-semibold mb-1">Endereço IP / Host</label>
@@ -141,7 +147,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                 type="text"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
-                placeholder="192.168.1.100 ou db.meudominio.com"
+                placeholder="Ex: 192.168.1.100 ou db.empresa.com"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
             </div>
@@ -157,7 +163,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
-          {/* Usuário e Senha de Login no Banco */}
+          {/* Usuário e Senha do Banco */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
@@ -197,31 +203,6 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
-          {/* Banco de Dados Real e Versão */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">Banco de Dados Principal (`datname`)</label>
-              <input
-                type="text"
-                value={database}
-                onChange={(e) => setDatabase(e.target.value)}
-                placeholder="meubanco_prod"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">Versão do PostgreSQL</label>
-              <input
-                type="text"
-                value={pgVersion}
-                onChange={(e) => setPgVersion(e.target.value)}
-                placeholder="Ex: PostgreSQL 15.4 ou PostgreSQL 16.2"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
-              />
-            </div>
-          </div>
-
           {/* Ambiente */}
           <div>
             <label className="block text-slate-300 font-semibold mb-1">Ambiente</label>
@@ -240,10 +221,10 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
             <div className="flex items-center space-x-2 text-slate-300 font-semibold">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Conexão e Telemetria de Métricas</span>
+              <span>Identificação Automática de Versão e Bancos</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              O painel exibirá estritamente o banco de dados configurado (<code>{database}</code>) e o usuário (<code>{user}</code>).
+              A versão do PostgreSQL será obtida via <code>SELECT version();</code> e o primeiro banco de dados retornado será definido como o principal do servidor.
             </p>
           </div>
 

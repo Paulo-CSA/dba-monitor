@@ -348,22 +348,22 @@ export default function App() {
     port: number;
     user: string;
     password?: string;
-    database: string;
+    database?: string;
     pgVersion?: string;
     environment?: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
-    const dbName = serverData.database || 'meubanco_prod';
     const serverPgVersion = serverData.pgVersion || 'PostgreSQL 16.2';
 
+    const defaultDbName = serverData.database || 'postgres';
     const databasesList: DatabaseInfo[] =
       serverData.liveDatabases && serverData.liveDatabases.length > 0
         ? serverData.liveDatabases
         : [
             {
-              datname: dbName,
+              datname: defaultDbName,
               sizeBytes: 1.5 * 1024 * 1024 * 1024,
               sizeFormatted: '1.5 GB',
               activeConnections: 5,
@@ -375,6 +375,9 @@ export default function App() {
               status: 'online'
             }
           ];
+
+    // Primary database is strictly the first database returned
+    const primaryDb = databasesList[0]?.datname || defaultDbName;
 
     const newServer: ServerInstance = {
       id: newServerId,
@@ -398,7 +401,7 @@ export default function App() {
 
     setFleetServers((prev) => [...prev, newServer]);
     setSelectedServerId(newServerId);
-    setSelectedDatabaseName(dbName);
+    setSelectedDatabaseName(primaryDb);
     setShowConnectionModal(false);
   };
 
