@@ -255,6 +255,41 @@ export default function App() {
     }
   };
 
+  const handleDeleteBackup = async (id: string) => {
+    try {
+      const res = await fetch(`/api/db/backups/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setBackupOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            recentBackups: prev.recentBackups.filter((b) => b.id !== id)
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Delete backup error:', err);
+    }
+  };
+
+  const handleClearAllBackups = async () => {
+    try {
+      const res = await fetch('/api/db/backups', { method: 'DELETE' });
+      if (res.ok) {
+        setBackupOverview((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            recentBackups: [],
+            timeSinceLastBackupFormatted: 'Sem histórico recente'
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Clear backups error:', err);
+    }
+  };
+
   // Alert Rule Handlers
   const handleAddRule = async (rule: Omit<AlertRule, 'id'>) => {
     try {
@@ -704,6 +739,8 @@ export default function App() {
             <BackupTracker
               backupOverview={backupOverview}
               onTriggerBackup={handleTriggerBackup}
+              onDeleteBackup={handleDeleteBackup}
+              onClearAllBackups={handleClearAllBackups}
               isTriggering={isTriggeringBackup}
               server={activeServerObject}
               databaseName={activeDb?.datname || selectedDatabaseName}

@@ -192,6 +192,19 @@ async function startServer() {
     res.json({ success: true, entry: newEntry });
   });
 
+  // Delete individual backup entry log
+  app.delete('/api/db/backups/:id', (req, res) => {
+    const { id } = req.params;
+    const success = backupMonitorSingleton.deleteBackupEntry(id);
+    res.json({ success });
+  });
+
+  // Clear all backup logs
+  app.delete('/api/db/backups', (req, res) => {
+    backupMonitorSingleton.clearAllBackups();
+    res.json({ success: true });
+  });
+
   // Alert Rules
   app.get('/api/db/alerts/rules', (req, res) => {
     res.json(alertEngineSingleton.getRules());

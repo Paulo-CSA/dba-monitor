@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { BackupOverview } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Download, Plus, Play, Server, Database } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Download, Plus, Play, Server, Database, Trash2 } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
   backupOverview: BackupOverview;
   onTriggerBackup: (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => void;
+  onDeleteBackup?: (id: string) => void;
+  onClearAllBackups?: () => void;
   isTriggering: boolean;
   server?: ServerInstance;
   databaseName?: string;
@@ -15,6 +17,8 @@ interface BackupTrackerProps {
 export const BackupTracker: React.FC<BackupTrackerProps> = ({
   backupOverview,
   onTriggerBackup,
+  onDeleteBackup,
+  onClearAllBackups,
   isTriggering,
   server,
   databaseName
@@ -142,7 +146,18 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
       {/* Backup History Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <h3 className="text-sm font-bold text-white">Histórico e Registro de Backups de Segurança</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white">Histórico e Registro de Backups de Segurança</h3>
+          {backupOverview.recentBackups.length > 0 && onClearAllBackups && (
+            <button
+              onClick={onClearAllBackups}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Limpar Todos os Logs</span>
+            </button>
+          )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -154,12 +169,13 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 <th className="py-2.5 px-4">Tamanho</th>
                 <th className="py-2.5 px-4">Status & Integridade</th>
                 <th className="py-2.5 px-4">Destino no Storage</th>
+                <th className="py-2.5 px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {backupOverview.recentBackups.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-mono">
                     Nenhum backup registrado até o momento. Clique em &quot;Iniciar Backup&quot; para disparar um backup manual.
                   </td>
                 </tr>
@@ -185,6 +201,17 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-400 truncate max-w-xs">{bkp.location}</td>
+                    <td className="py-3 px-4 text-right">
+                      {onDeleteBackup && (
+                        <button
+                          onClick={() => onDeleteBackup(bkp.id)}
+                          title="Excluir este registro de log"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

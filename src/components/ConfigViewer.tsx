@@ -27,28 +27,29 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
     setTimeout(() => setCopiedSql(false), 2000);
   };
 
-  // Build server-customized file locations if server prop is available
-  const activeLocations: FileLocationSetting[] = server
-    ? [
+  // Use file locations queried directly from pg_settings (category = 'File Locations')
+  const activeLocations: FileLocationSetting[] = (config.fileLocations && config.fileLocations.length > 0)
+    ? config.fileLocations
+    : [
         {
           name: 'config_file',
-          setting: `/var/lib/postgresql/data/postgresql.conf`,
+          setting: `/etc/postgresql/14/main/postgresql.conf`,
           category: 'File Locations',
-          short_desc: `Arquivo principal de parâmetros do servidor ${server.name}`,
+          short_desc: `Arquivo principal de parâmetros do servidor ${server ? server.name : 'PostgreSQL'}`,
           is_writable: false,
           status: 'valid'
         },
         {
           name: 'hba_file',
-          setting: `/var/lib/postgresql/data/pg_hba.conf`,
+          setting: `/etc/postgresql/14/main/pg_hba.conf`,
           category: 'File Locations',
-          short_desc: `Regras de autenticação de cliente (HBA) do servidor ${server.name}`,
+          short_desc: `Regras de autenticação de cliente (HBA) do servidor ${server ? server.name : 'PostgreSQL'}`,
           is_writable: false,
           status: 'valid'
         },
         {
           name: 'ident_file',
-          setting: `/var/lib/postgresql/data/pg_ident.conf`,
+          setting: `/etc/postgresql/14/main/pg_ident.conf`,
           category: 'File Locations',
           short_desc: 'Mapeamento de identidades de usuários do sistema operacional',
           is_writable: false,
@@ -56,22 +57,21 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
         },
         {
           name: 'data_directory',
-          setting: `/var/lib/postgresql/data`,
+          setting: `/var/lib/postgresql/14/main`,
           category: 'File Locations',
-          short_desc: `Diretório de armazenamento físico dos dados (${server.totalSizeFormatted})`,
+          short_desc: `Diretório de armazenamento físico dos dados (${server ? server.totalSizeFormatted : '14 GB'})`,
           is_writable: true,
           status: 'valid'
         },
         {
           name: 'external_pid_file',
-          setting: `/var/run/postgresql/16-main.pid`,
+          setting: `/var/run/postgresql/14-main.pid`,
           category: 'File Locations',
-          short_desc: `Arquivo de identificação do processo mestre na porta ${server.port}`,
+          short_desc: `Arquivo de identificação do processo mestre na porta ${server ? server.port : 5432}`,
           is_writable: false,
           status: 'valid'
         }
-      ]
-    : config.fileLocations;
+      ];
 
   const filteredLocations = activeLocations.filter(
     item =>

@@ -8,41 +8,41 @@ export function createInitialFileLocations(): FileLocationSetting[] {
   return [
     {
       name: 'config_file',
-      setting: '/var/lib/postgresql/data/postgresql.conf',
+      setting: '/etc/postgresql/14/main/postgresql.conf',
       category: 'File Locations',
-      short_desc: 'Sets the server\'s main configuration file.',
+      short_desc: 'Arquivo principal de configurações do servidor (config_file).',
       is_writable: false,
       status: 'valid'
     },
     {
       name: 'hba_file',
-      setting: '/var/lib/postgresql/data/pg_hba.conf',
+      setting: '/etc/postgresql/14/main/pg_hba.conf',
       category: 'File Locations',
-      short_desc: 'Sets the server\'s host-based authentication configuration file.',
+      short_desc: 'Regras de autenticação de clientes baseada em host (hba_file).',
       is_writable: false,
       status: 'valid'
     },
     {
       name: 'ident_file',
-      setting: '/var/lib/postgresql/data/pg_ident.conf',
+      setting: '/etc/postgresql/14/main/pg_ident.conf',
       category: 'File Locations',
-      short_desc: 'Sets the server\'s identification mapping configuration file.',
+      short_desc: 'Mapeamento de identidades de usuários do sistema operacional (ident_file).',
       is_writable: false,
       status: 'valid'
     },
     {
       name: 'data_directory',
-      setting: '/var/lib/postgresql/data',
+      setting: '/var/lib/postgresql/14/main',
       category: 'File Locations',
-      short_desc: 'Sets the directory to locate store data files.',
+      short_desc: 'Diretório de armazenamento físico do cluster de dados (data_directory).',
       is_writable: true,
       status: 'valid'
     },
     {
       name: 'external_pid_file',
-      setting: '/var/run/postgresql/16-main.pid',
+      setting: '/var/run/postgresql/14-main.pid',
       category: 'File Locations',
-      short_desc: 'Sets an external process ID file created by the server.',
+      short_desc: 'Arquivo de identificação do processo mestre do PostgreSQL (external_pid_file).',
       is_writable: false,
       status: 'valid'
     }

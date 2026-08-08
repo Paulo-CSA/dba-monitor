@@ -182,11 +182,43 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       walLevelSetting: 'replica',
       fileLocations: fileLocations.length > 0 ? fileLocations : [
         {
-          name: 'data_directory',
-          setting: '/var/lib/postgresql/data',
+          name: 'config_file',
+          setting: '/etc/postgresql/14/main/postgresql.conf',
           category: 'File Locations',
-          short_desc: 'Sets the directory to locate store data files.',
+          short_desc: 'Arquivo mestre de parâmetros do servidor PostgreSQL.',
+          is_writable: false,
+          status: 'valid'
+        },
+        {
+          name: 'hba_file',
+          setting: '/etc/postgresql/14/main/pg_hba.conf',
+          category: 'File Locations',
+          short_desc: 'Regras de autenticação de cliente (HBA).',
+          is_writable: false,
+          status: 'valid'
+        },
+        {
+          name: 'ident_file',
+          setting: '/etc/postgresql/14/main/pg_ident.conf',
+          category: 'File Locations',
+          short_desc: 'Mapeamento de identidades de usuários.',
+          is_writable: false,
+          status: 'valid'
+        },
+        {
+          name: 'data_directory',
+          setting: '/var/lib/postgresql/14/main',
+          category: 'File Locations',
+          short_desc: 'Diretório de armazenamento físico de dados.',
           is_writable: true,
+          status: 'valid'
+        },
+        {
+          name: 'external_pid_file',
+          setting: '/var/run/postgresql/14-main.pid',
+          category: 'File Locations',
+          short_desc: 'Arquivo de identificação do processo mestre.',
+          is_writable: false,
           status: 'valid'
         }
       ]

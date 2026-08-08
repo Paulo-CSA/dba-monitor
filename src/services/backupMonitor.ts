@@ -96,6 +96,17 @@ SELECT pg_catalog.set_config('search_path', '', false);
 
     return newEntry;
   }
+
+  public deleteBackupEntry(id: string): boolean {
+    const prevCount = this.overview.recentBackups.length;
+    this.overview.recentBackups = this.overview.recentBackups.filter((b) => b.id !== id);
+    return this.overview.recentBackups.length < prevCount;
+  }
+
+  public clearAllBackups(): void {
+    this.overview.recentBackups = [];
+    this.overview.timeSinceLastBackupFormatted = 'Sem histórico recente';
+  }
 }
 
 export const backupMonitorSingleton = new BackupMonitor();
