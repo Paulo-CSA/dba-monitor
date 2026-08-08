@@ -19,6 +19,8 @@ export function exportToCSV(
   // Header
   sections.push(`"RELATÓRIO DE MONITORAMENTO DE BANCO DE DADOS POSTGRESQL"`);
   sections.push(`"Título:","${options.reportTitle}"`);
+  sections.push(`"Servidor Alvo:","${options.targetServerName || 'Todos os Servidores'}"`);
+  sections.push(`"Banco de Dados Alvo:","${options.targetDatabaseName || 'Todos os Bancos'}"`);
   sections.push(`"Gerado por:","${options.preparedBy}"`);
   sections.push(`"Data do Relatório:","${new Date().toLocaleString('pt-BR')}"`);
   sections.push(`"Período:","${options.startDate} até ${options.endDate}"`);

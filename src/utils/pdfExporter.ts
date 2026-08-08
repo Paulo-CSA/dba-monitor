@@ -37,8 +37,8 @@ export function exportToPDF(
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Por: ${options.preparedBy}`, 14, 19);
-  doc.text(`Período: ${options.startDate} - ${options.endDate}`, 14, 24);
+  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Por: ${options.preparedBy}`, 14, 18);
+  doc.text(`Servidor: ${options.targetServerName || 'Geral'} | Banco: ${options.targetDatabaseName || 'Geral'}`, 14, 23);
 
   let currentY = 35;
 

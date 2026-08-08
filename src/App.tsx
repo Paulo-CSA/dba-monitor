@@ -11,6 +11,7 @@ import { AlertRulesManager } from './components/AlertRulesManager';
 import { AiQueryModal } from './components/AiQueryModal';
 import { ExportReportModal } from './components/ExportReportModal';
 import { ConnectionSettingsModal } from './components/ConnectionSettingsModal';
+import { ActiveConnectionsModal } from './components/ActiveConnectionsModal';
 
 import { ServerFleetOverview } from './components/ServerFleetOverview';
 import { ServerSidebarDashboard } from './components/ServerSidebarDashboard';
@@ -60,6 +61,7 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showAlertModal, setShowAlertModal] = useState<boolean>(false);
   const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
+  const [showConnectionsModal, setShowConnectionsModal] = useState<boolean>(false);
 
   // AI Modal States
   const [selectedAiQuery, setSelectedAiQuery] = useState<StuckQuery | null>(null);
@@ -551,6 +553,7 @@ export default function App() {
             onUpdateServer={handleUpdateServer}
             onDeleteServer={handleDeleteServer}
             onAddServer={handleAddServer}
+            onOpenConnectionsModal={() => setShowConnectionsModal(true)}
           />
         )}
 
@@ -562,6 +565,7 @@ export default function App() {
             metrics={metrics}
             onSelectServer={(serverId) => setSelectedServerId(serverId)}
             onSwitchTab={(tab) => setActiveTab(tab)}
+            onOpenConnectionsModal={() => setShowConnectionsModal(true)}
           />
         )}
 
@@ -608,6 +612,8 @@ export default function App() {
                     { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` },
                     { label: 'Limit Max', value: `${activeServerMetrics.currentResources.maxConnections}` }
                   ]}
+                  onClick={() => setShowConnectionsModal(true)}
+                  clickableHint="Clique para ver conexões ativas"
                 />
 
                 <MetricCard
@@ -711,9 +717,28 @@ export default function App() {
       {/* MODALS */}
       {showExportModal && (
         <ExportReportModal
+          servers={fleetServers}
+          initialServerId={selectedServerId}
+          initialDatabaseName={selectedDatabaseName}
           onExportCSV={handleExportCSV}
           onExportPDF={handleExportPDF}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {showConnectionsModal && (
+        <ActiveConnectionsModal
+          isOpen={showConnectionsModal}
+          onClose={() => setShowConnectionsModal(false)}
+          serverName={activeServerObject?.name || 'PostgreSQL Server'}
+          databaseName={activeDb?.datname || selectedDatabaseName || 'postgres'}
+          activeConnectionsCount={activeServerMetrics?.currentResources.activeConnections || 0}
+          maxConnectionsCount={activeServerMetrics?.currentResources.maxConnections || 100}
+          tps={activeServerMetrics?.currentResources.tps || 0}
+          connectionsList={activeServerStuckQueries}
+          onKillPid={handleKillPid}
+          onAnalyzeWithAi={handleAnalyzeWithAi}
+          killingPid={killingPid}
         />
       )}
 

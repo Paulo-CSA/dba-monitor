@@ -9,5 +9,7 @@ export interface ReportFilterOptions {
   endDate: string;
   reportTitle: string;
   preparedBy: string;
+  targetServerName?: string;
+  targetDatabaseName?: string;
   notes?: string;
 }

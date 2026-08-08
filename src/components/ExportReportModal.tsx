@@ -1,20 +1,37 @@
 import React, { useState } from 'react';
 import { ReportFilterOptions } from '../types/export';
-import { FileText, Download, X, FileSpreadsheet, FileCode } from 'lucide-react';
+import { ServerInstance } from '../types/serverFleet';
+import { FileText, Download, X, FileSpreadsheet, Server, Database } from 'lucide-react';
 
 interface ExportReportModalProps {
+  servers?: ServerInstance[];
+  initialServerId?: string;
+  initialDatabaseName?: string;
   onExportCSV: (options: ReportFilterOptions) => void;
   onExportPDF: (options: ReportFilterOptions) => void;
   onClose: () => void;
 }
 
 export const ExportReportModal: React.FC<ExportReportModalProps> = ({
+  servers = [],
+  initialServerId = '',
+  initialDatabaseName = '',
   onExportCSV,
   onExportPDF,
   onClose
 }) => {
   const [title, setTitle] = useState('Relatório Técnico de Desempenho e Integridade PostgreSQL');
   const [preparedBy, setPreparedBy] = useState('Equipe DBA / DevOps');
+  const [selectedServerId, setSelectedServerId] = useState<string>(
+    initialServerId || (servers[0]?.id || 'all')
+  );
+
+  const selectedServer = servers.find((s) => s.id === selectedServerId);
+
+  const [selectedDatabaseName, setSelectedDatabaseName] = useState<string>(
+    initialDatabaseName || (selectedServer?.databases[0]?.datname || 'all')
+  );
+
   const [includeMetrics, setIncludeMetrics] = useState(true);
   const [includeFileLocs, setIncludeFileLocs] = useState(true);
   const [includeHealth, setIncludeHealth] = useState(true);
@@ -22,19 +39,33 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   const [includeStuckQueries, setIncludeStuckQueries] = useState(true);
   const [notes, setNotes] = useState('Análise de métricas em tempo real e verificação de parâmetros pg_settings.');
 
-  const buildOptions = (): ReportFilterOptions => ({
-    reportTitle: title,
-    preparedBy,
-    includeMetricsSummary: includeMetrics,
-    includeFileLocations: includeFileLocs,
-    includeHealthIntegrity: includeHealth,
-    includeBackupStatus: includeBackups,
-    includeStuckQueriesAndLocks: includeStuckQueries,
-    includeAlertsLog: true,
-    startDate: new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10),
-    endDate: new Date().toISOString().slice(0, 10),
-    notes
-  });
+  const buildOptions = (): ReportFilterOptions => {
+    let targetServerLabel = 'Todos os Servidores da Frota';
+    if (selectedServerId !== 'all' && selectedServer) {
+      targetServerLabel = `${selectedServer.name} (${selectedServer.host}:${selectedServer.port})`;
+    }
+
+    let targetDbLabel = 'Todos os Bancos de Dados';
+    if (selectedDatabaseName !== 'all' && selectedDatabaseName) {
+      targetDbLabel = selectedDatabaseName;
+    }
+
+    return {
+      reportTitle: title,
+      preparedBy,
+      targetServerName: targetServerLabel,
+      targetDatabaseName: targetDbLabel,
+      includeMetricsSummary: includeMetrics,
+      includeFileLocations: includeFileLocs,
+      includeHealthIntegrity: includeHealth,
+      includeBackupStatus: includeBackups,
+      includeStuckQueriesAndLocks: includeStuckQueries,
+      includeAlertsLog: true,
+      startDate: new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10),
+      endDate: new Date().toISOString().slice(0, 10),
+      notes
+    };
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -47,13 +78,13 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Exportação de Relatórios de Monitoramento</h2>
-              <p className="text-xs text-slate-400">Geração de documentos em formato PDF e planilhas CSV com filtros customizados</p>
+              <p className="text-xs text-slate-400">Geração de documentos em formato PDF e planilhas CSV com seleção de escopo</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -61,6 +92,60 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
 
         {/* Modal Form */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+          {/* Target Server and Database Selection */}
+          <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1.5">
+              <Server className="w-4 h-4 text-cyan-400" />
+              <span>Seleção do Alvo do Relatório</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Server Select */}
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Servidor Alvo:</label>
+                <select
+                  value={selectedServerId}
+                  onChange={(e) => {
+                    const srvId = e.target.value;
+                    setSelectedServerId(srvId);
+                    const srv = servers.find((s) => s.id === srvId);
+                    if (srv && srv.databases.length > 0) {
+                      setSelectedDatabaseName(srv.databases[0].datname);
+                    } else {
+                      setSelectedDatabaseName('all');
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+                >
+                  <option value="all">Todos os Servidores (Geral)</option>
+                  {servers.map((srv) => (
+                    <option key={srv.id} value={srv.id}>
+                      [{srv.environment}] {srv.name} ({srv.host})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Database Select */}
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Banco de Dados Alvo:</label>
+                <select
+                  value={selectedDatabaseName}
+                  onChange={(e) => setSelectedDatabaseName(e.target.value)}
+                  disabled={selectedServerId === 'all'}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-cyan-300 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer disabled:opacity-50"
+                >
+                  <option value="all">Todos os Bancos do Servidor</option>
+                  {selectedServer?.databases.map((db) => (
+                    <option key={db.datname} value={db.datname}>
+                      {db.datname} ({db.sizeFormatted})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-slate-300 font-semibold mb-1">Título do Relatório</label>
             <input
@@ -169,3 +254,4 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     </div>
   );
 };
+

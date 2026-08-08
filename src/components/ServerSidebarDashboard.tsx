@@ -45,6 +45,7 @@ interface ServerSidebarDashboardProps {
   onUpdateServer?: (updatedServer: ServerInstance) => void;
   onDeleteServer?: (serverId: string) => void;
   onAddServer?: (newServer: ServerInstance) => void;
+  onOpenConnectionsModal?: () => void;
 }
 
 export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
@@ -61,7 +62,8 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   killingPid,
   onUpdateServer,
   onDeleteServer,
-  onAddServer
+  onAddServer,
+  onOpenConnectionsModal
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação'>('TODOS');
@@ -550,6 +552,8 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                       { label: 'Transações/s', value: `${activeDatabase?.tps || metrics.currentResources.tps}` },
                       { label: 'Cache Hit', value: `${activeDatabase?.cacheHitRatio || 99}%` }
                     ]}
+                    onClick={onOpenConnectionsModal}
+                    clickableHint="Clique para ver conexões ativas"
                   />
 
                   <MetricCard

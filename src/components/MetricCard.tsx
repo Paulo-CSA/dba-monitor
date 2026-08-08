@@ -1,5 +1,5 @@
 import React from 'react';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, ExternalLink } from 'lucide-react';
 
 interface MetricCardProps {
   title: string;
@@ -11,6 +11,8 @@ interface MetricCardProps {
   status?: 'normal' | 'warning' | 'critical';
   progressPercent?: number;
   details?: { label: string; value: string }[];
+  onClick?: () => void;
+  clickableHint?: string;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -21,7 +23,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   icon: Icon,
   status = 'normal',
   progressPercent,
-  details
+  details,
+  onClick,
+  clickableHint
 }) => {
   const getStatusBg = () => {
     switch (status) {
@@ -57,10 +61,22 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   };
 
   return (
-    <div className={`p-4 rounded-2xl border ${getStatusBg()} shadow-sm transition-all hover:border-slate-700`}>
+    <div
+      onClick={onClick}
+      className={`p-4 rounded-2xl border ${getStatusBg()} shadow-sm transition-all ${
+        onClick
+          ? 'cursor-pointer hover:border-cyan-500/80 hover:scale-[1.01] hover:shadow-lg hover:shadow-cyan-950/30 group'
+          : 'hover:border-slate-700'
+      }`}
+    >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</p>
+          <div className="flex items-center space-x-1.5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</p>
+            {onClick && (
+              <ExternalLink className="w-3.5 h-3.5 text-cyan-400 opacity-70 group-hover:opacity-100 transition-opacity" />
+            )}
+          </div>
           <div className="flex items-baseline space-x-1.5 mt-1">
             <span className="text-2xl font-bold font-mono tracking-tight text-white">{value}</span>
             {unit && <span className="text-xs text-slate-400 font-medium">{unit}</span>}
@@ -98,6 +114,14 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           ))}
         </div>
       )}
+
+      {onClick && (
+        <div className="mt-2.5 pt-2 border-t border-slate-800/40 flex items-center justify-between text-[10px] text-cyan-400 font-semibold group-hover:underline">
+          <span>{clickableHint || 'Clique para ver conexões ativas'}</span>
+          <span>&rarr;</span>
+        </div>
+      )}
     </div>
   );
 };
+

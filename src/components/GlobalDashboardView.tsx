@@ -41,6 +41,7 @@ interface GlobalDashboardViewProps {
   metrics: RealtimeMetricsPayload | null;
   onSelectServer?: (serverId: string) => void;
   onSwitchTab?: (tab: string) => void;
+  onOpenConnectionsModal?: () => void;
 }
 
 export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
@@ -48,7 +49,8 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
   activeAlerts,
   metrics,
   onSelectServer,
-  onSwitchTab
+  onSwitchTab,
+  onOpenConnectionsModal
 }) => {
   // Calculate aggregated metrics across all servers
   const totalServers = servers.length;
@@ -276,9 +278,14 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
 
         {/* Card 4: Conexões Ativas & Alertas */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-slate-700 transition-all">
+        <div
+          onClick={onOpenConnectionsModal}
+          className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-cyan-500/80 hover:shadow-lg hover:shadow-cyan-950/20 transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Conexões Ativas & Alertas</span>
+            <span className="text-xs font-semibold text-slate-400 group-hover:text-cyan-300 transition-colors">
+              Conexões Ativas & Alertas &rarr;
+            </span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
               <AlertTriangle className="w-4 h-4" />
             </div>
