@@ -32,23 +32,23 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
     ? [
         {
           name: 'config_file',
-          setting: `/var/lib/postgresql/data/${server.host}/postgresql.conf`,
+          setting: `/var/lib/postgresql/data/postgresql.conf`,
           category: 'File Locations',
-          short_desc: `Arquivo mestre do servidor ${server.name} (${server.host})`,
+          short_desc: `Arquivo principal de parâmetros do servidor ${server.name}`,
           is_writable: false,
           status: 'valid'
         },
         {
           name: 'hba_file',
-          setting: `/var/lib/postgresql/data/${server.host}/pg_hba.conf`,
+          setting: `/var/lib/postgresql/data/pg_hba.conf`,
           category: 'File Locations',
-          short_desc: `Regras de autenticação de cliente para ${server.name}`,
+          short_desc: `Regras de autenticação de cliente (HBA) do servidor ${server.name}`,
           is_writable: false,
           status: 'valid'
         },
         {
           name: 'ident_file',
-          setting: `/var/lib/postgresql/data/${server.host}/pg_ident.conf`,
+          setting: `/var/lib/postgresql/data/pg_ident.conf`,
           category: 'File Locations',
           short_desc: 'Mapeamento de identidades de usuários do sistema operacional',
           is_writable: false,
@@ -56,17 +56,17 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
         },
         {
           name: 'data_directory',
-          setting: `/var/lib/postgresql/data/${server.host}`,
+          setting: `/var/lib/postgresql/data`,
           category: 'File Locations',
-          short_desc: `Diretório de armazenamento físico do servidor (${server.totalSizeFormatted})`,
+          short_desc: `Diretório de armazenamento físico dos dados (${server.totalSizeFormatted})`,
           is_writable: true,
           status: 'valid'
         },
         {
           name: 'external_pid_file',
-          setting: `/var/run/postgresql/${server.id}-5432.pid`,
+          setting: `/var/run/postgresql/16-main.pid`,
           category: 'File Locations',
-          short_desc: `Arquivo de identificação do processo mestre do servidor na porta ${server.port}`,
+          short_desc: `Arquivo de identificação do processo mestre na porta ${server.port}`,
           is_writable: false,
           status: 'valid'
         }
