@@ -591,72 +591,10 @@ export default function App() {
 
     const activeMatched = matched.filter((q) => !killedPids.includes(q.pid));
 
-    if (activeMatched.length > 0) {
-      return activeMatched.map((q) => ({
-        ...q,
-        client_addr: q.client_addr && q.client_addr !== '127.0.0.1' ? q.client_addr : hostIp
-      }));
-    }
-
-    const dbOwner = activeServerObject.dbUser || 'postgres';
-
-    // Calculate unique base PID for this database name
-    let hash = 0;
-    for (let i = 0; i < currentDbName.length; i++) {
-      hash = (hash << 5) - hash + currentDbName.charCodeAt(i);
-      hash |= 0;
-    }
-    const basePid = 3000 + (Math.abs(hash) % 5000);
-
-    const defaultSessions: StuckQuery[] = [
-      {
-        pid: basePid,
-        usename: dbOwner,
-        datname: currentDbName,
-        client_addr: hostIp,
-        application_name: `DBeaver 26.1.4 - SQLEditor <${currentDbName}>`,
-        state: 'active',
-        query: `SELECT * FROM pg_stat_activity WHERE datname = '${currentDbName}';`,
-        durationSeconds: 0.1,
-        wait_event_type: null,
-        wait_event: null,
-        blocking_pid: null,
-        isStuck: false,
-        query_start: new Date().toISOString()
-      },
-      {
-        pid: basePid + 1,
-        usename: dbOwner,
-        datname: currentDbName,
-        client_addr: hostIp,
-        application_name: `DBeaver 26.1.4 - Main <${currentDbName}>`,
-        state: 'active',
-        query: `SELECT count(*), max(created_at) FROM ${currentDbName}.public.user_activity_logs WHERE datname = '${currentDbName}';`,
-        durationSeconds: 1.2,
-        wait_event_type: null,
-        wait_event: null,
-        blocking_pid: null,
-        isStuck: false,
-        query_start: new Date(Date.now() - 1200).toISOString()
-      },
-      {
-        pid: basePid + 2,
-        usename: dbOwner,
-        datname: currentDbName,
-        client_addr: hostIp,
-        application_name: `DBeaver 26.1.4 - Metadata <${currentDbName}>`,
-        state: 'idle',
-        query: `SELECT nspname, relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE relkind = 'r';`,
-        durationSeconds: 0.5,
-        wait_event_type: null,
-        wait_event: null,
-        blocking_pid: null,
-        isStuck: false,
-        query_start: new Date(Date.now() - 500).toISOString()
-      }
-    ];
-
-    return defaultSessions.filter((s) => !killedPids.includes(s.pid));
+    return activeMatched.map((q) => ({
+      ...q,
+      client_addr: q.client_addr && q.client_addr !== '127.0.0.1' ? q.client_addr : hostIp
+    }));
   }, [activeServerObject, stuckQueries, currentDbName, killedPids]);
 
   const activeServerLocks = activeServerObject
