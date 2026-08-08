@@ -2,6 +2,7 @@ import pg from 'pg';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
 import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
+import { formatBytes } from '../utils/formatters';
 
 export interface LiveConnectParams {
   host: string;
@@ -71,14 +72,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         // Restricted permission on size query
       }
 
-      let formattedSize = '0 MB';
-      if (bytes > 0) {
-        if (bytes >= 1024 * 1024 * 1024) {
-          formattedSize = `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-        } else {
-          formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        }
-      }
+      const formattedSize = formatBytes(bytes);
 
       databases.push({
         datname: dbName,
@@ -108,11 +102,10 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         wait_event_type,
         wait_event
       FROM pg_stat_activity
-      WHERE state != 'idle' 
-        AND pid != pg_backend_pid()
+      WHERE pid != pg_backend_pid()
         AND query NOT LIKE '%pg_stat_activity%'
       ORDER BY duration_seconds DESC
-      LIMIT 20;
+      LIMIT 50;
     `;
     let stuckQueries: StuckQuery[] = [];
     try {
@@ -156,17 +149,18 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       // Default file locations if restricted
     }
 
-    // 5. Uptime
-    let uptimeFormatted = '1d 04h';
+    // 5. Uptime using SELECT pg_postmaster_start_time() AS servidor_ligado_desde;
+    let uptimeFormatted = '0d 0h 0m';
     try {
-      const uptimeRes = await client.query(`SELECT pg_postmaster_start_time();`);
-      if (uptimeRes.rows[0]?.pg_postmaster_start_time) {
-        const startTime = new Date(uptimeRes.rows[0].pg_postmaster_start_time);
+      const uptimeRes = await client.query(`SELECT pg_postmaster_start_time() AS servidor_ligado_desde;`);
+      if (uptimeRes.rows[0]?.servidor_ligado_desde) {
+        const startTime = new Date(uptimeRes.rows[0].servidor_ligado_desde);
         const diffMs = Date.now() - startTime.getTime();
-        const hours = Math.floor(diffMs / (1000 * 60 * 60));
-        const days = Math.floor(hours / 24);
-        const remHours = hours % 24;
-        uptimeFormatted = `${days}d ${remHours}h`;
+        const totalMinutes = Math.floor(Math.max(0, diffMs) / (1000 * 60));
+        const days = Math.floor(totalMinutes / (60 * 24));
+        const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+        const minutes = totalMinutes % 60;
+        uptimeFormatted = `${days}d ${hours}h ${minutes}m`;
       }
     } catch {
       // Fallback

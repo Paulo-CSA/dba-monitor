@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { metricsEngineSingleton } from './src/services/metricsEngine';
@@ -10,6 +11,38 @@ import { backupMonitorSingleton } from './src/services/backupMonitor';
 import { alertEngineSingleton } from './src/services/alertEngine';
 import { mockServerFleet } from './src/services/fleetService';
 import { testAndFetchLivePgData } from './src/services/pgLiveService';
+import { ServerInstance } from './src/types/serverFleet';
+
+const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
+
+function loadServersFromDisk(): ServerInstance[] {
+  try {
+    if (fs.existsSync(SERVERS_PERSISTENCE_FILE)) {
+      const data = fs.readFileSync(SERVERS_PERSISTENCE_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error loading servers.json:', err);
+  }
+  return mockServerFleet;
+}
+
+function saveServersToDisk(servers: ServerInstance[]) {
+  try {
+    const dir = path.dirname(SERVERS_PERSISTENCE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SERVERS_PERSISTENCE_FILE, JSON.stringify(servers, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving servers.json:', err);
+  }
+}
+
+let activeServersStore: ServerInstance[] = loadServersFromDisk();
 
 async function startServer() {
   const app = express();
@@ -54,8 +87,38 @@ async function startServer() {
   app.get('/api/db/servers', (req, res) => {
     res.json({
       observabilityMode: true,
-      servers: mockServerFleet
+      servers: activeServersStore
     });
+  });
+
+  // Save new server instance (persisted)
+  app.post('/api/db/servers', (req, res) => {
+    const newServer: ServerInstance = req.body;
+    if (!newServer.id) {
+      newServer.id = `srv-${Date.now().toString().slice(-4)}`;
+    }
+    // Remove if duplicate id
+    activeServersStore = activeServersStore.filter((s) => s.id !== newServer.id);
+    activeServersStore.push(newServer);
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, server: newServer, servers: activeServersStore });
+  });
+
+  // Update server instance (persisted)
+  app.put('/api/db/servers/:id', (req, res) => {
+    const { id } = req.params;
+    const updated: ServerInstance = req.body;
+    activeServersStore = activeServersStore.map((s) => (s.id === id ? { ...s, ...updated } : s));
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
+  });
+
+  // Delete server instance (persisted)
+  app.delete('/api/db/servers/:id', (req, res) => {
+    const { id } = req.params;
+    activeServersStore = activeServersStore.filter((s) => s.id !== id);
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
   });
 
   // Realtime metrics route
@@ -121,11 +184,11 @@ async function startServer() {
     res.json(backupData);
   });
 
-  // Trigger manual backup
+  // Trigger manual backup with custom path
   app.post('/api/db/backups/trigger', (req, res) => {
-    const { type } = req.body;
+    const { type, location } = req.body;
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
-    const newEntry = backupMonitorSingleton.triggerManualBackup(backupType);
+    const newEntry = backupMonitorSingleton.triggerManualBackup(backupType, location);
     res.json({ success: true, entry: newEntry });
   });
 

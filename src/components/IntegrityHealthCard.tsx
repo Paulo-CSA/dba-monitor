@@ -134,33 +134,41 @@ export const IntegrityHealthCard: React.FC<IntegrityHealthCardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
-              {health.topBloatedTables.map((tb, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/40">
-                  <td className="py-3 px-4 font-mono font-semibold text-white">
-                    {tb.schemaName}.{tb.tableName}
-                  </td>
-                  <td className="py-3 px-4 font-mono text-slate-300">{formatBytes(tb.tableSizeBytes)}</td>
-                  <td className="py-3 px-4 font-mono text-rose-300 font-medium">{formatBytes(tb.bloatBytes)}</td>
-                  <td className="py-3 px-4 font-mono">
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      tb.bloatPercentage > 30 ? 'bg-rose-950 text-rose-400 border border-rose-800' : 'bg-slate-800 text-slate-300'
-                    }`}>
-                      {tb.bloatPercentage}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold">
-                    <span className={`text-[11px] px-2.5 py-1 rounded-lg ${
-                      tb.recommendedAction === 'VACUUM FULL'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : tb.recommendedAction === 'VACUUM'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300'
-                    }`}>
-                      {tb.recommendedAction}
-                    </span>
+              {health.topBloatedTables.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-500 font-mono">
+                    Nenhuma tabela com inchaço (bloat) identificada no momento.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                health.topBloatedTables.map((tb, idx) => (
+                  <tr key={idx} className="hover:bg-slate-800/40">
+                    <td className="py-3 px-4 font-mono font-semibold text-white">
+                      {tb.schemaName}.{tb.tableName}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-300">{formatBytes(tb.tableSizeBytes)}</td>
+                    <td className="py-3 px-4 font-mono text-rose-300 font-medium">{formatBytes(tb.bloatBytes)}</td>
+                    <td className="py-3 px-4 font-mono">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                        tb.bloatPercentage > 30 ? 'bg-rose-950 text-rose-400 border border-rose-800' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        {tb.bloatPercentage}%
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono font-bold">
+                      <span className={`text-[11px] px-2.5 py-1 rounded-lg ${
+                        tb.recommendedAction === 'VACUUM FULL'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : tb.recommendedAction === 'VACUUM'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300'
+                      }`}>
+                        {tb.recommendedAction}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

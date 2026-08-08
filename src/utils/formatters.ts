@@ -1,10 +1,9 @@
-export function formatBytes(bytes: number, decimals = 2): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 KB';
+  if (bytes < 1024) return `${bytes} Bytes`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(decimals)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(decimals)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export function formatMs(ms: number): string {

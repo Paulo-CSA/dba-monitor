@@ -6,7 +6,7 @@ import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
   backupOverview: BackupOverview;
-  onTriggerBackup: (type: 'pg_dump' | 'pg_basebackup') => void;
+  onTriggerBackup: (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => void;
   isTriggering: boolean;
   server?: ServerInstance;
   databaseName?: string;
@@ -20,6 +20,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   databaseName
 }) => {
   const [selectedType, setSelectedType] = useState<'pg_basebackup' | 'pg_dump'>('pg_basebackup');
+  const [customPath, setCustomPath] = useState<string>('/var/backups/postgresql/');
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
 
@@ -89,7 +90,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       </div>
 
       {/* Manual Backup Trigger Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center space-x-2">
             <Plus className="w-4 h-4 text-blue-400" />
@@ -98,24 +99,44 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
           <p className="text-xs text-slate-400 mt-0.5">Execute um backup físico (pg_basebackup) ou exportação lógica de esquemas (pg_dump)</p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as 'pg_basebackup' | 'pg_dump')}
-            className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
-          >
-            <option value="pg_basebackup">pg_basebackup (Físico Completo)</option>
-            <option value="pg_dump">pg_dump (Lógico de Tabelas)</option>
-          </select>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div className="md:col-span-6">
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+              Caminho de Destino no Servidor / Storage:
+            </label>
+            <input
+              type="text"
+              value={customPath}
+              onChange={(e) => setCustomPath(e.target.value)}
+              placeholder="/var/backups/postgresql/ ou s3://meu-bucket/pg/"
+              className="w-full bg-slate-950 border border-slate-800 text-xs text-cyan-300 font-mono rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            />
+          </div>
 
-          <button
-            onClick={() => onTriggerBackup(selectedType)}
-            disabled={isTriggering}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer whitespace-nowrap"
-          >
-            <Play className={`w-3.5 h-3.5 ${isTriggering ? 'animate-spin' : ''}`} />
-            <span>{isTriggering ? 'Gerando Backup...' : 'Iniciar Backup'}</span>
-          </button>
+          <div className="md:col-span-4">
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+              Tipo de Backup:
+            </label>
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value as 'pg_basebackup' | 'pg_dump')}
+              className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+            >
+              <option value="pg_basebackup">pg_basebackup (Físico Completo)</option>
+              <option value="pg_dump">pg_dump (Lógico de Tabelas)</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <button
+              onClick={() => onTriggerBackup(selectedType, customPath)}
+              disabled={isTriggering}
+              className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer whitespace-nowrap"
+            >
+              <Play className={`w-3.5 h-3.5 ${isTriggering ? 'animate-spin' : ''}`} />
+              <span>{isTriggering ? 'Gerando...' : 'Iniciar Backup'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

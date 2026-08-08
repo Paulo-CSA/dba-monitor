@@ -81,9 +81,11 @@ export const Header: React.FC<HeaderProps> = ({
               className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
             >
               <option value={1000}>Atualizar 1s</option>
-              <option value={2000}>Atualizar 2s</option>
-              <option value={5000}>Atualizar 5s</option>
-              <option value={10000}>Atualizar 10s</option>
+              <option value={30000}>Atualizar 30s</option>
+              <option value={60000}>Atualizar 1min</option>
+              <option value={300000}>Atualizar 5min</option>
+              <option value={600000}>Atualizar 10min</option>
+              <option value={1800000}>Atualizar 30min</option>
             </select>
 
             {/* Alerts Drawer Button */}

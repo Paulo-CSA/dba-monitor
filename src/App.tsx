@@ -28,7 +28,7 @@ import { ReportFilterOptions } from './types/export';
 import { exportToCSV } from './utils/csvExporter';
 import { exportToPDF } from './utils/pdfExporter';
 import { analyzeQueryWithAI } from './services/aiDiagnosticService';
-import { formatMs } from './utils/formatters';
+import { formatMs, formatBytes } from './utils/formatters';
 
 import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus } from 'lucide-react';
 
@@ -223,13 +223,13 @@ export default function App() {
   };
 
   // Handler for Manual Backup
-  const handleTriggerBackup = async (type: 'pg_dump' | 'pg_basebackup') => {
+  const handleTriggerBackup = async (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => {
     setIsTriggeringBackup(true);
     try {
       const res = await fetch('/api/db/backups/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type })
+        body: JSON.stringify({ type, location: customPath })
       });
 
       if (res.ok) {
@@ -315,13 +315,22 @@ export default function App() {
     setShowExportModal(false);
   };
 
-  const handleUpdateServer = (updatedServer: ServerInstance) => {
+  const handleUpdateServer = async (updatedServer: ServerInstance) => {
     setFleetServers((prev) =>
       prev.map((srv) => (srv.id === updatedServer.id ? updatedServer : srv))
     );
+    try {
+      await fetch(`/api/db/servers/${updatedServer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedServer)
+      });
+    } catch (err) {
+      console.error('Error updating server:', err);
+    }
   };
 
-  const handleDeleteServer = (serverId: string) => {
+  const handleDeleteServer = async (serverId: string) => {
     setFleetServers((prev) => {
       const next = prev.filter((srv) => srv.id !== serverId);
       if (selectedServerId === serverId && next.length > 0) {
@@ -332,17 +341,31 @@ export default function App() {
       }
       return next;
     });
+    try {
+      await fetch(`/api/db/servers/${serverId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Error deleting server:', err);
+    }
   };
 
-  const handleAddServer = (newServer: ServerInstance) => {
+  const handleAddServer = async (newServer: ServerInstance) => {
     setFleetServers((prev) => [...prev, newServer]);
     setSelectedServerId(newServer.id);
     if (newServer.databases.length > 0) {
       setSelectedDatabaseName(newServer.databases[0].datname);
     }
+    try {
+      await fetch('/api/db/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newServer)
+      });
+    } catch (err) {
+      console.error('Error saving new server:', err);
+    }
   };
 
-  const handleSaveConnectionServer = (serverData: {
+  const handleSaveConnectionServer = async (serverData: {
     name: string;
     host: string;
     port: number;
@@ -364,9 +387,7 @@ export default function App() {
     const primaryDb = databasesList[0]?.datname || defaultDbName;
 
     const totalBytesSum = databasesList.reduce((acc, d) => acc + (d.sizeBytes || 0), 0);
-    const sizeFormatted = totalBytesSum >= 1024 * 1024 * 1024
-      ? `${(totalBytesSum / (1024 * 1024 * 1024)).toFixed(2)} GB`
-      : `${(totalBytesSum / (1024 * 1024)).toFixed(1)} MB`;
+    const sizeFormatted = formatBytes(totalBytesSum);
 
     const newServer: ServerInstance = {
       id: newServerId,
@@ -377,7 +398,7 @@ export default function App() {
       dbPassword: serverData.password || '',
       environment: serverData.environment || 'Produção',
       pgVersion: serverPgVersion,
-      uptimeFormatted: '1d 0h',
+      uptimeFormatted: '0d 0h 0m',
       cpuUsagePercent: 0,
       avgLatencyMs: 0,
       totalDatabasesCount: databasesList.length,
@@ -391,6 +412,16 @@ export default function App() {
     setSelectedServerId(newServerId);
     setSelectedDatabaseName(primaryDb);
     setShowConnectionModal(false);
+
+    try {
+      await fetch('/api/db/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newServer)
+      });
+    } catch (err) {
+      console.error('Error saving connection server:', err);
+    }
   };
 
   const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
