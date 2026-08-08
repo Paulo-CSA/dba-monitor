@@ -340,10 +340,13 @@ export default function App() {
   // PDF Export Trigger
   const handleExportPDF = (options: ReportFilterOptions) => {
     if (!metrics || !sysConfig || !integrity || !backupOverview) return;
+    const currentLocs = (activeServerObject?.fileLocations && activeServerObject.fileLocations.length > 0)
+      ? activeServerObject.fileLocations
+      : sysConfig.fileLocations;
     exportToPDF(
       options,
       metrics,
-      sysConfig.fileLocations,
+      currentLocs,
       integrity,
       backupOverview,
       stuckQueries,
@@ -413,6 +416,7 @@ export default function App() {
     environment?: 'Produção' | 'Desenvolvimento' | 'Homologação';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
+    liveFileLocations?: any[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
     const serverPgVersion = serverData.pgVersion || 'PostgreSQL';
@@ -442,7 +446,8 @@ export default function App() {
       totalActiveConnections: databasesList.reduce((acc, d) => acc + (d.activeConnections || 0), 0),
       totalSizeFormatted: sizeFormatted,
       status: 'healthy',
-      databases: databasesList
+      databases: databasesList,
+      fileLocations: serverData.liveFileLocations && serverData.liveFileLocations.length > 0 ? serverData.liveFileLocations : undefined
     };
 
     setFleetServers((prev) => [...prev, newServer]);

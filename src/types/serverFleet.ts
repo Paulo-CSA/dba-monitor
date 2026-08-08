@@ -1,3 +1,5 @@
+import { FileLocationSetting } from './config';
+
 export interface DatabaseInfo {
   datname: string;
   sizeBytes: number;
@@ -28,4 +30,5 @@ export interface ServerInstance {
   dbUser?: string;
   dbPassword?: string;
   databases: DatabaseInfo[];
+  fileLocations?: FileLocationSetting[];
 }

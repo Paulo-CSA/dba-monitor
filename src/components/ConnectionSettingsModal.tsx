@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers } from 'lucide-react';
 import { DatabaseInfo } from '../types/serverFleet';
+import { FileLocationSetting } from '../types/config';
 
 interface ConnectionSettingsModalProps {
   onClose: () => void;
@@ -15,6 +16,7 @@ interface ConnectionSettingsModalProps {
     environment?: 'Produção' | 'Desenvolvimento' | 'Homologação';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
+    liveFileLocations?: FileLocationSetting[];
   }) => void;
 }
 
@@ -36,6 +38,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     pgVersion?: string;
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
+    liveFileLocations?: FileLocationSetting[];
   } | null>(null);
 
   const performAutoQuery = async () => {
@@ -59,14 +62,16 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       if (data.success && data.isLive) {
         const detectedDbs: DatabaseInfo[] = data.databases || [];
         const versionStr = data.pgVersion || 'PostgreSQL';
+        const fileLocs: FileLocationSetting[] = data.sysConfig?.fileLocations || [];
         setTestStatus({
           success: true,
-          message: `Conexão efetuada com sucesso! Versão obtida via SELECT version(): ${versionStr}. ${detectedDbs.length} banco(s) retornado(s) via SELECT datname FROM pg_database.`,
+          message: `Conexão efetuada com sucesso! Versão obtida via SELECT version(): ${versionStr}. ${detectedDbs.length} banco(s) retornado(s) via SELECT datname FROM pg_database. ${fileLocs.length} arquivo(s) obtido(s) via SELECT name, setting FROM pg_settings WHERE category = 'File Locations'.`,
           pgVersion: versionStr,
           liveDatabases: detectedDbs,
-          liveQueries: data.stuckQueries
+          liveQueries: data.stuckQueries,
+          liveFileLocations: fileLocs
         });
-        return { success: true, pgVersion: versionStr, databases: detectedDbs, queries: data.stuckQueries };
+        return { success: true, pgVersion: versionStr, databases: detectedDbs, queries: data.stuckQueries, fileLocations: fileLocs };
       } else {
         const errMsg = data.message || data.error || 'Não foi possível conectar ao servidor PostgreSQL informado. Verifique Host, Porta e Credenciais.';
         setTestStatus({
@@ -74,7 +79,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           message: errMsg,
           liveDatabases: []
         });
-        return { success: false, pgVersion: '', databases: [], queries: [] };
+        return { success: false, pgVersion: '', databases: [], queries: [], fileLocations: [] };
       }
     } catch (err) {
       setIsTesting(false);
@@ -84,7 +89,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         message: errMsg,
         liveDatabases: []
       });
-      return { success: false, pgVersion: '', databases: [], queries: [] };
+      return { success: false, pgVersion: '', databases: [], queries: [], fileLocations: [] };
     }
   };
 
@@ -96,6 +101,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     let versionStr = testStatus?.pgVersion;
     let databases = testStatus?.liveDatabases;
     let queries = testStatus?.liveQueries;
+    let fileLocations = testStatus?.liveFileLocations;
 
     if (!testStatus || (!databases && !testStatus.success)) {
       const res = await performAutoQuery();
@@ -105,6 +111,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       versionStr = res.pgVersion;
       databases = res.databases;
       queries = res.queries;
+      fileLocations = res.fileLocations;
     }
 
     if (testStatus && !testStatus.success) {
@@ -124,7 +131,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         pgVersion: versionStr || 'PostgreSQL',
         environment,
         liveDatabases: databases || [],
-        liveQueries: queries || []
+        liveQueries: queries || [],
+        liveFileLocations: fileLocations || []
       });
     } else {
       onClose();

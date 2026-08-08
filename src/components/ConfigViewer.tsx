@@ -28,50 +28,65 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
   };
 
   // Use file locations queried directly from pg_settings (category = 'File Locations')
-  const activeLocations: FileLocationSetting[] = (config.fileLocations && config.fileLocations.length > 0)
-    ? config.fileLocations
-    : [
-        {
-          name: 'config_file',
-          setting: `/etc/postgresql/14/main/postgresql.conf`,
-          category: 'File Locations',
-          short_desc: `Arquivo principal de parâmetros do servidor ${server ? server.name : 'PostgreSQL'}`,
-          is_writable: false,
-          status: 'valid'
-        },
-        {
-          name: 'hba_file',
-          setting: `/etc/postgresql/14/main/pg_hba.conf`,
-          category: 'File Locations',
-          short_desc: `Regras de autenticação de cliente (HBA) do servidor ${server ? server.name : 'PostgreSQL'}`,
-          is_writable: false,
-          status: 'valid'
-        },
-        {
-          name: 'ident_file',
-          setting: `/etc/postgresql/14/main/pg_ident.conf`,
-          category: 'File Locations',
-          short_desc: 'Mapeamento de identidades de usuários do sistema operacional',
-          is_writable: false,
-          status: 'valid'
-        },
-        {
-          name: 'data_directory',
-          setting: `/var/lib/postgresql/14/main`,
-          category: 'File Locations',
-          short_desc: `Diretório de armazenamento físico dos dados (${server ? server.totalSizeFormatted : '14 GB'})`,
-          is_writable: true,
-          status: 'valid'
-        },
-        {
-          name: 'external_pid_file',
-          setting: `/var/run/postgresql/14-main.pid`,
-          category: 'File Locations',
-          short_desc: `Arquivo de identificação do processo mestre na porta ${server ? server.port : 5432}`,
-          is_writable: false,
-          status: 'valid'
-        }
-      ];
+  const getActiveLocations = (): FileLocationSetting[] => {
+    if (server?.fileLocations && server.fileLocations.length > 0) {
+      return server.fileLocations;
+    }
+
+    if (config.fileLocations && config.fileLocations.length > 0) {
+      return config.fileLocations;
+    }
+
+    // Dynamic default locations derived from server version and info
+    const pgVer = server?.pgVersion || '14';
+    const matchVer = pgVer.match(/(?:PostgreSQL\s+)?(\d+)/i);
+    const verNum = matchVer ? matchVer[1] : '14';
+
+    return [
+      {
+        name: 'config_file',
+        setting: `/etc/postgresql/${verNum}/main/postgresql.conf`,
+        category: 'File Locations',
+        short_desc: `Arquivo principal de parâmetros do servidor ${server ? server.name : 'PostgreSQL'}`,
+        is_writable: false,
+        status: 'valid'
+      },
+      {
+        name: 'hba_file',
+        setting: `/etc/postgresql/${verNum}/main/pg_hba.conf`,
+        category: 'File Locations',
+        short_desc: `Regras de autenticação de cliente (HBA) do servidor ${server ? server.name : 'PostgreSQL'}`,
+        is_writable: false,
+        status: 'valid'
+      },
+      {
+        name: 'ident_file',
+        setting: `/etc/postgresql/${verNum}/main/pg_ident.conf`,
+        category: 'File Locations',
+        short_desc: 'Mapeamento de identidades de usuários do sistema operacional',
+        is_writable: false,
+        status: 'valid'
+      },
+      {
+        name: 'data_directory',
+        setting: `/var/lib/postgresql/${verNum}/main`,
+        category: 'File Locations',
+        short_desc: `Diretório de armazenamento físico dos dados (${server ? server.totalSizeFormatted : '14 GB'})`,
+        is_writable: true,
+        status: 'valid'
+      },
+      {
+        name: 'external_pid_file',
+        setting: `/var/run/postgresql/${verNum}-main.pid`,
+        category: 'File Locations',
+        short_desc: `Arquivo de identificação do processo mestre na porta ${server ? server.port : 5432}`,
+        is_writable: false,
+        status: 'valid'
+      }
+    ];
+  };
+
+  const activeLocations = getActiveLocations();
 
   const filteredLocations = activeLocations.filter(
     item =>

@@ -144,8 +144,25 @@ async function startServer() {
 
   // Database configuration & File locations (SELECT name, setting FROM pg_settings WHERE category = 'File Locations')
   app.get('/api/db/config', (req, res) => {
+    const { serverId } = req.query;
     const sysConfig = configServiceSingleton.getSystemConfig();
     const query = configServiceSingleton.getFileLocationsSqlQuery();
+
+    if (serverId && typeof serverId === 'string') {
+      const server = activeServersStore.find((s) => s.id === serverId);
+      if (server && server.fileLocations && server.fileLocations.length > 0) {
+        res.json({
+          config: {
+            ...sysConfig,
+            version: server.pgVersion || sysConfig.version,
+            fileLocations: server.fileLocations
+          },
+          sqlQuery: query
+        });
+        return;
+      }
+    }
+
     res.json({ config: sysConfig, sqlQuery: query });
   });
 
