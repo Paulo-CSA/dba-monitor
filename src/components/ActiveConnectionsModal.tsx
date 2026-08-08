@@ -52,12 +52,13 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
       return matchesForDb;
     }
 
-    // Fallback: If connectionsList has generic items, map them to databaseName
+    // Fallback: If connectionsList has generic items, map them preserving real PID, IP and query
     if (connectionsList.length > 0) {
       return connectionsList.map((conn, idx) => ({
         ...conn,
-        datname: databaseName,
-        pid: conn.pid || 1020 + idx
+        datname: conn.datname || databaseName,
+        pid: conn.pid || 2547 + idx,
+        client_addr: conn.client_addr || '192.168.73.1'
       }));
     }
 

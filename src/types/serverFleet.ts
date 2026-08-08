@@ -1,4 +1,5 @@
 import { FileLocationSetting } from './config';
+import { StuckQuery } from './locks';
 
 export interface DatabaseInfo {
   datname: string;
@@ -31,4 +32,5 @@ export interface ServerInstance {
   dbPassword?: string;
   databases: DatabaseInfo[];
   fileLocations?: FileLocationSetting[];
+  stuckQueries?: StuckQuery[];
 }

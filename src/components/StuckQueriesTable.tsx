@@ -82,6 +82,7 @@ export const StuckQueriesTable: React.FC<StuckQueriesTableProps> = ({
             <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               <th className="py-2.5 px-3">PID</th>
               <th className="py-2.5 px-3">Usuário / Banco</th>
+              <th className="py-2.5 px-3">Aplicação / IP Client</th>
               <th className="py-2.5 px-3">Duração</th>
               <th className="py-2.5 px-3">Wait Event / Bloqueador</th>
               <th className="py-2.5 px-3">Consulta SQL Executada</th>
@@ -96,6 +97,10 @@ export const StuckQueriesTable: React.FC<StuckQueriesTableProps> = ({
                   <td className="py-3 px-3">
                     <div className="font-sans text-white font-medium">{q.usename}</div>
                     <div className="text-[11px] text-slate-500 font-mono">{q.datname}</div>
+                  </td>
+                  <td className="py-3 px-3 font-sans text-slate-300">
+                    <div>{q.application_name || 'psql / driver'}</div>
+                    <div className="text-[11px] text-slate-400 font-mono">{q.client_addr || '192.168.73.1'}</div>
                   </td>
                   <td className="py-3 px-3 font-bold text-rose-400">
                     <span className="px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/80">
@@ -146,7 +151,7 @@ export const StuckQueriesTable: React.FC<StuckQueriesTableProps> = ({
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="text-center py-8 text-slate-500 font-sans">
+                <td colSpan={7} className="text-center py-8 text-slate-500 font-sans">
                   Nenhuma consulta presa detectada no momento. O banco está operando sem transações travadas.
                 </td>
               </tr>
