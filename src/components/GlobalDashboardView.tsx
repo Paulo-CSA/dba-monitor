@@ -123,15 +123,13 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
   const envCounts = {
     Produção: servers.filter((s) => s.environment === 'Produção').length,
     Desenvolvimento: servers.filter((s) => s.environment === 'Desenvolvimento').length,
-    Homologação: servers.filter((s) => s.environment === 'Homologação').length,
-    Teste: servers.filter((s) => s.environment === 'Teste').length
+    Homologação: servers.filter((s) => s.environment === 'Homologação').length
   };
 
   const envPieData = [
     { name: 'Produção', value: envCounts.Produção, color: '#f43f5e' },
     { name: 'Desenvolvimento', value: envCounts.Desenvolvimento, color: '#06b6d4' },
-    { name: 'Homologação', value: envCounts.Homologação, color: '#f59e0b' },
-    { name: 'Teste', value: envCounts.Teste, color: '#10b981' }
+    { name: 'Homologação', value: envCounts.Homologação, color: '#f59e0b' }
   ].filter((item) => item.value > 0);
 
   // Environment Colors for bar labels
@@ -143,8 +141,6 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         return 'bg-cyan-950 text-cyan-300 border-cyan-800';
       case 'Homologação':
         return 'bg-amber-950 text-amber-300 border-amber-800';
-      case 'Teste':
-        return 'bg-emerald-950 text-emerald-300 border-emerald-800';
       default:
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }

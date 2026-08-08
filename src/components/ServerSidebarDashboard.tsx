@@ -64,7 +64,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   onAddServer
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste'>('TODOS');
+  const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação'>('TODOS');
   const [activeTab, setActiveTab] = useState<'databases' | 'metrics' | 'queries_locks'>('databases');
   const [editingServer, setEditingServer] = useState<ServerInstance | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -77,7 +77,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
       name: 'Novo Servidor PG',
       host: '10.0.0.50',
       port: 5432,
-      region: 'us-east-1',
       environment: 'Desenvolvimento',
       pgVersion: 'PostgreSQL 16.2',
       uptimeFormatted: '1d 0h',
@@ -107,12 +106,11 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   };
 
   // Environment tag list with abbreviations
-  const envTags: { key: 'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste'; label: string; full: string }[] = [
+  const envTags: { key: 'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação'; label: string; full: string }[] = [
     { key: 'TODOS', label: 'TODOS', full: 'Todos os Ambientes' },
     { key: 'Produção', label: 'PROD', full: 'Produção' },
     { key: 'Desenvolvimento', label: 'DEV', full: 'Desenvolvimento' },
-    { key: 'Homologação', label: 'HOMO', full: 'Homologação' },
-    { key: 'Teste', label: 'TEST', full: 'Teste' }
+    { key: 'Homologação', label: 'HOMO', full: 'Homologação' }
   ];
 
   // Filter servers in sidebar by search term AND selected environment tag
@@ -172,8 +170,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                       ? 'bg-cyan-950 text-cyan-200 border border-cyan-700 shadow-sm shadow-cyan-950'
                       : tag.key === 'Homologação'
                       ? 'bg-amber-950 text-amber-200 border border-amber-700 shadow-sm shadow-amber-950'
-                      : tag.key === 'Teste'
-                      ? 'bg-emerald-950 text-emerald-200 border border-emerald-700 shadow-sm shadow-emerald-950'
                       : 'bg-cyan-600 text-white border border-cyan-400 shadow-sm'
                     : 'bg-slate-950/80 text-slate-400 border border-slate-800/80 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}

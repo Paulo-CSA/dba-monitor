@@ -24,8 +24,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
   // Filter servers and their databases by search
   const filteredServers = servers.filter((srv) => {
     const matchesServerName = srv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      srv.host.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      srv.region.toLowerCase().includes(searchTerm.toLowerCase());
+      srv.host.toLowerCase().includes(searchTerm.toLowerCase());
 
     const hasMatchingDb = srv.databases.some((db) =>
       db.datname.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -118,7 +117,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
 
               <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-800/50 pt-2">
                 <span>{srv.pgVersion}</span>
-                <span className="text-emerald-400 font-semibold">{srv.region.split(' ')[0]}</span>
+                <span className="text-emerald-400 font-semibold">{srv.environment}</span>
               </div>
             </div>
           );

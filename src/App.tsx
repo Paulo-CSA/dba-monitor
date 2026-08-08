@@ -350,7 +350,7 @@ export default function App() {
     password?: string;
     database?: string;
     pgVersion?: string;
-    environment?: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
+    environment?: 'Produção' | 'Desenvolvimento' | 'Homologação';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
   }) => {
@@ -386,7 +386,6 @@ export default function App() {
       port: serverData.port || 5432,
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
-      region: 'sa-east-1',
       environment: serverData.environment || 'Produção',
       pgVersion: serverPgVersion,
       uptimeFormatted: '1d 0h',

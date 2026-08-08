@@ -30,7 +30,6 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         port: server.port,
         dbUser: server.dbUser || 'postgres',
         dbPassword: server.dbPassword || '',
-        region: server.region,
         environment: server.environment,
         pgVersion: server.pgVersion
       });
@@ -81,7 +80,6 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
       port: Number(formData.port) || server.port,
       dbUser: formData.dbUser || 'postgres',
       dbPassword: formData.dbPassword || '',
-      region: formData.region || server.region,
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
       pgVersion: formData.pgVersion || server.pgVersion,
       totalDatabasesCount: newDatabases.length,
@@ -239,31 +237,18 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
             </div>
           </div>
 
-          {/* Região e Ambiente */}
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Região / Datacenter</label>
-              <input
-                type="text"
-                value={formData.region || ''}
-                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">Ambiente / Tag</label>
-              <select
-                value={formData.environment || 'Produção'}
-                onChange={(e) => setFormData({ ...formData, environment: e.target.value as ServerInstance['environment'] })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
-              >
-                <option value="Produção">Produção (PROD)</option>
-                <option value="Desenvolvimento">Desenvolvimento (DEV)</option>
-                <option value="Homologação">Homologação (HOMO)</option>
-                <option value="Teste">Teste (TEST)</option>
-              </select>
-            </div>
+          {/* Ambiente */}
+          <div className="pt-2 border-t border-slate-800/60">
+            <label className="block text-xs font-semibold text-slate-200 mb-1">Ambiente</label>
+            <select
+              value={formData.environment || 'Produção'}
+              onChange={(e) => setFormData({ ...formData, environment: e.target.value as ServerInstance['environment'] })}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+            >
+              <option value="Produção">Produção (PROD)</option>
+              <option value="Desenvolvimento">Desenvolvimento (DEV)</option>
+              <option value="Homologação">Homologação (HOMO)</option>
+            </select>
           </div>
 
           {/* Confirmation Box for Delete */}

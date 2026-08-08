@@ -16,8 +16,7 @@ export interface ServerInstance {
   name: string;
   host: string;
   port: number;
-  region: string;
-  environment: 'Produção' | 'Desenvolvimento' | 'Homologação' | 'Teste';
+  environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;
   cpuUsagePercent: number;

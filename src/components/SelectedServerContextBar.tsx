@@ -40,8 +40,6 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
         return 'bg-cyan-950 text-cyan-300 border-cyan-800';
       case 'Homologação':
         return 'bg-amber-950 text-amber-300 border-amber-800';
-      case 'Teste':
-        return 'bg-emerald-950 text-emerald-300 border-emerald-800';
       default:
         return 'bg-slate-800 text-slate-300 border-slate-700';
     }
@@ -55,8 +53,6 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
         return 'DEV';
       case 'Homologação':
         return 'HOMO';
-      case 'Teste':
-        return 'TEST';
       default:
         return env;
     }
