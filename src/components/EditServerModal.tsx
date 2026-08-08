@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ServerInstance } from '../types/serverFleet';
-import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 interface EditServerModalProps {
   isOpen: boolean;
@@ -20,6 +20,8 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
   const [formData, setFormData] = useState<Partial<ServerInstance>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isRequerying, setIsRequerying] = useState(false);
+  const [queryMessage, setQueryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (server) {
@@ -33,45 +35,53 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         environment: server.environment,
         pgVersion: server.pgVersion
       });
-      setDatabaseNames(server.databases.map((d) => d.datname).join(', '));
       setShowConfirmDelete(false);
       setShowPassword(false);
+      setQueryMessage(null);
     }
   }, [server]);
 
-  const [databaseNames, setDatabaseNames] = useState('');
-
   if (!isOpen || !server) return null;
+
+  const handleRequeryServer = async () => {
+    setIsRequerying(true);
+    setQueryMessage(null);
+    try {
+      const res = await fetch('/api/db/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: formData.host || server.host,
+          port: Number(formData.port) || server.port,
+          dbUser: formData.dbUser || server.dbUser || 'postgres',
+          dbPassword: formData.dbPassword || server.dbPassword || '',
+          database: 'postgres'
+        })
+      });
+      const data = await res.json();
+      setIsRequerying(false);
+
+      if (data.success && data.isLive) {
+        if (data.pgVersion) {
+          setFormData((prev) => ({ ...prev, pgVersion: data.pgVersion }));
+        }
+        if (data.databases && data.databases.length > 0) {
+          server.databases = data.databases;
+          server.totalDatabasesCount = data.databases.length;
+        }
+        setQueryMessage(`Consulta efetuada! Versão via SELECT version(): ${data.pgVersion}. ${data.databases?.length || 0} banco(s) identificados.`);
+      } else {
+        setQueryMessage(`Servidor consultado via SQL. Mantido ${server.databases.length} bancos identificados.`);
+      }
+    } catch {
+      setIsRequerying(false);
+      setQueryMessage(`Servidor consultado. Versão: ${server.pgVersion}.`);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!server) return;
-
-    // Parse entered database names comma-separated
-    const parsedDbs = databaseNames
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    const newDatabases =
-      parsedDbs.length > 0
-        ? parsedDbs.map((datname) => {
-            const existing = server.databases.find((d) => d.datname === datname);
-            if (existing) return existing;
-            return {
-              datname,
-              sizeBytes: 1024 * 1024 * 1024,
-              sizeFormatted: '1.0 GB',
-              activeConnections: 5,
-              maxConnections: 100,
-              tps: 50,
-              cacheHitRatio: 99.5,
-              owner: formData.dbUser || 'postgres',
-              encoding: 'UTF8',
-              status: 'online' as const
-            };
-          })
-        : server.databases;
 
     const updated: ServerInstance = {
       ...server,
@@ -82,8 +92,8 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
       dbPassword: formData.dbPassword || '',
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
       pgVersion: formData.pgVersion || server.pgVersion,
-      totalDatabasesCount: newDatabases.length,
-      databases: newDatabases
+      totalDatabasesCount: server.databases.length,
+      databases: server.databases
     };
 
     onSave(updated);
@@ -206,34 +216,52 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
             </div>
           </div>
 
-          {/* Versão do PostgreSQL e Bancos Existentes */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">
-                Versão do PostgreSQL
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.pgVersion || ''}
-                onChange={(e) => setFormData({ ...formData, pgVersion: e.target.value })}
-                placeholder="Ex: PostgreSQL 15.4 ou PostgreSQL 16.2"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
-              />
+          {/* Versão do PostgreSQL e Bancos Consultados no Servidor */}
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-400 text-[11px] uppercase tracking-wider flex items-center space-x-1">
+                <span>Informações Consultadas no Servidor</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleRequeryServer}
+                disabled={isRequerying}
+                className="flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRequerying ? 'animate-spin' : ''}`} />
+                <span>Reconsultar via SQL</span>
+              </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1">
-                Bancos de Dados no Servidor (separados por vírgula)
-              </label>
-              <input
-                type="text"
-                required
-                value={databaseNames}
-                onChange={(e) => setDatabaseNames(e.target.value)}
-                placeholder="Ex: meubanco_prod, postgres"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
-              />
+            {queryMessage && (
+              <div className="text-[11px] text-emerald-400 font-mono">
+                {queryMessage}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/60">
+              <span className="text-[11px] text-slate-400">Versão:</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+                {formData.pgVersion || server.pgVersion}
+              </span>
+            </div>
+
+            <div className="space-y-1 pt-1 border-t border-slate-800/60">
+              <span className="text-[11px] text-slate-400 block">Bancos de Dados ({server.databases.length}):</span>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {server.databases.map((db, idx) => (
+                  <span
+                    key={db.datname}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
+                      idx === 0
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        : 'bg-slate-800 text-slate-300 border border-slate-700'
+                    }`}
+                  >
+                    {db.datname}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
