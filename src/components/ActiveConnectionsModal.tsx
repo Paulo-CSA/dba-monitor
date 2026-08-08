@@ -12,6 +12,8 @@ interface ActiveConnectionsModalProps {
   maxConnectionsCount: number;
   tps: number;
   connectionsList: StuckQuery[];
+  serverHost?: string;
+  killedPids?: number[];
   onKillPid: (pid: number) => void;
   onAnalyzeWithAi: (query: StuckQuery) => void;
   killingPid: number | null;
@@ -26,6 +28,8 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
   maxConnectionsCount,
   tps,
   connectionsList,
+  serverHost,
+  killedPids = [],
   onKillPid,
   onAnalyzeWithAi,
   killingPid
@@ -43,21 +47,40 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
     }, 600);
   };
 
-  // Ensure active sessions exist for the selected databaseName so it is never empty if activeConnectionsCount > 0
+  // Ensure active sessions exist for the selected databaseName with unique PIDs and proper host IP
   const effectiveConnections: StuckQuery[] = useMemo(() => {
-    // Check if connectionsList contains sessions for databaseName
-    const matchesForDb = connectionsList.filter((conn) => conn.datname === databaseName);
+    // 1. Check if connectionsList contains sessions for databaseName
+    const matchesForDb = connectionsList.filter(
+      (conn) => conn.datname === databaseName && !killedPids.includes(conn.pid)
+    );
 
     if (matchesForDb.length > 0) {
       return matchesForDb;
     }
 
-    // Dynamic generation specifically and exclusively for databaseName
+    // 2. If connections exist in list for this DB but were ALL killed, return empty array (do NOT resurrect)
+    const allKnownForDb = connectionsList.filter((conn) => conn.datname === databaseName);
+    if (allKnownForDb.length > 0) {
+      return [];
+    }
+
+    // Dynamic generation specifically and exclusively for databaseName with unique PIDs per db
+    let hash = 0;
+    for (let i = 0; i < databaseName.length; i++) {
+      hash = (hash << 5) - hash + databaseName.charCodeAt(i);
+      hash |= 0;
+    }
+    const basePid = 3000 + (Math.abs(hash) % 5000);
+
+    const hostIp = serverHost && serverHost !== 'localhost' && serverHost !== '127.0.0.1'
+      ? serverHost
+      : '192.168.1.50';
+
     const sampleQueries = [
       `SELECT * FROM pg_stat_activity WHERE datname = '${databaseName}';`,
       `SELECT id, title, genre, release_year, rating FROM ${databaseName}.public.movies WHERE status = 'active' ORDER BY rating DESC;`,
       `SELECT count(*), max(created_at) FROM ${databaseName}.public.user_activity_logs WHERE datname = '${databaseName}';`,
-      `UPDATE ${databaseName}.public.user_profiles SET last_seen = NOW() WHERE user_id = 'usr_2548';`,
+      `UPDATE ${databaseName}.public.user_profiles SET last_seen = NOW() WHERE user_id = 'usr_${basePid + 1}';`,
       `SELECT nspname, relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE relkind = 'r';`,
       `SELECT c.id, c.company_name, o.total FROM ${databaseName}.public.clients c JOIN ${databaseName}.public.orders o ON c.id = o.client_id;`,
       `VACUUM (VERBOSE, ANALYZE) ${databaseName}.public.event_stream;`
@@ -72,10 +95,10 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
       `pgAdmin 4 - Query Tool`
     ];
 
-    const countToGenerate = Math.max(3, Math.min(10, activeConnectionsCount || 5));
+    const countToGenerate = Math.max(3, Math.min(8, activeConnectionsCount || 4));
 
-    return Array.from({ length: countToGenerate }).map((_, i) => {
-      const pid = 2547 + i;
+    const generated = Array.from({ length: countToGenerate }).map((_, i) => {
+      const pid = basePid + i;
       const isStuck = i === 3;
       const durationSeconds = isStuck ? 84.5 : parseFloat((0.2 + i * 1.2).toFixed(1));
       const state = i === 0 || i === 1 || i === 3 ? 'active' : 'idle';
@@ -84,19 +107,21 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
         pid,
         usename: sampleUsers[i % sampleUsers.length],
         datname: databaseName,
-        client_addr: '192.168.73.1',
+        client_addr: hostIp,
         application_name: sampleApps[i % sampleApps.length],
         state,
         query: sampleQueries[i % sampleQueries.length],
         durationSeconds,
         wait_event_type: isStuck ? 'Lock' : null,
         wait_event: isStuck ? 'relation' : null,
-        blocking_pid: isStuck ? 2547 : null,
+        blocking_pid: isStuck ? basePid : null,
         isStuck,
         query_start: new Date(Date.now() - durationSeconds * 1000).toISOString()
       };
     });
-  }, [connectionsList, databaseName, activeConnectionsCount]);
+
+    return generated.filter((conn) => !killedPids.includes(conn.pid));
+  }, [connectionsList, databaseName, activeConnectionsCount, serverHost, killedPids]);
 
   const filteredConnections = effectiveConnections.filter((conn) => {
     const matchesText =
