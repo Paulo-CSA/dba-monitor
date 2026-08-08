@@ -64,37 +64,43 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
     // Dynamic generation if list is empty so user always sees active connections for databaseName
     const sampleQueries = [
       `SELECT * FROM pg_stat_activity WHERE datname = '${databaseName}';`,
-      `SELECT id, name, email, status, created_at FROM ${databaseName}.public.users WHERE status = 'active' ORDER BY last_login DESC LIMIT 100;`,
-      `UPDATE ${databaseName}.public.orders SET status = 'processed', updated_at = NOW() WHERE payment_status = 'paid';`,
-      `INSERT INTO ${databaseName}.public.audit_logs (user_id, action, ip_address) VALUES ('usr_992', 'LOGIN_SUCCESS', '192.168.1.104');`,
-      `SELECT date_trunc('hour', created_at), count(*), sum(total_amount) FROM ${databaseName}.public.transactions GROUP BY 1 ORDER BY 1 DESC;`,
-      `SELECT c.id, c.company_name, o.total FROM ${databaseName}.public.clients c JOIN ${databaseName}.public.orders o ON c.id = o.client_id WHERE o.created_at >= CURRENT_DATE;`,
+      `SELECT id, title, genre, release_year, rating FROM ${databaseName}.public.movies WHERE status = 'active' ORDER BY rating DESC;`,
+      `SELECT count(*), max(created_at) FROM ${databaseName}.public.user_activity_logs WHERE datname = '${databaseName}';`,
+      `UPDATE ${databaseName}.public.user_profiles SET last_seen = NOW() WHERE user_id = 'usr_2548';`,
+      `SELECT nspname, relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE relkind = 'r';`,
+      `SELECT c.id, c.company_name, o.total FROM ${databaseName}.public.clients c JOIN ${databaseName}.public.orders o ON c.id = o.client_id;`,
       `VACUUM (VERBOSE, ANALYZE) ${databaseName}.public.event_stream;`
     ];
 
-    const sampleUsers = ['postgres', 'app_backend', 'reporting_svc', 'bi_analytics', 'worker_pool'];
-    const sampleApps = ['DBeaver 24.0 - PostgreSQL Client', 'Node.js pg driver', 'psql CLI (x86_64)', 'Python asyncpg daemon', 'Go GORM Pool'];
+    const sampleUsers = ['postgres', 'postgres', 'postgres', 'app_backend', 'reporting_svc'];
+    const sampleApps = [
+      `DBeaver 26.1.4 - SQLEditor <Console>`,
+      `DBeaver 26.1.4 - Main <${databaseName}>`,
+      `DBeaver 26.1.4 - Metadata <${databaseName}>`,
+      `psql CLI (x86_64)`,
+      `pgAdmin 4 - Query Tool`
+    ];
 
-    const countToGenerate = Math.max(3, Math.min(12, activeConnectionsCount || 5));
+    const countToGenerate = Math.max(3, Math.min(10, activeConnectionsCount || 5));
 
     return Array.from({ length: countToGenerate }).map((_, i) => {
-      const pid = 1040 + i * 7;
-      const isStuck = i === 1;
-      const durationSeconds = isStuck ? 84.5 : parseFloat((0.2 + i * 1.5).toFixed(1));
+      const pid = 2547 + i;
+      const isStuck = i === 3;
+      const durationSeconds = isStuck ? 84.5 : parseFloat((0.2 + i * 1.2).toFixed(1));
       const state = i === 0 || i === 1 || i === 3 ? 'active' : 'idle';
 
       return {
         pid,
         usename: sampleUsers[i % sampleUsers.length],
         datname: databaseName,
-        client_addr: '192.168.1.' + (50 + i * 3),
+        client_addr: '192.168.73.1',
         application_name: sampleApps[i % sampleApps.length],
         state,
         query: sampleQueries[i % sampleQueries.length],
         durationSeconds,
         wait_event_type: isStuck ? 'Lock' : null,
         wait_event: isStuck ? 'relation' : null,
-        blocking_pid: isStuck ? 1040 : null,
+        blocking_pid: isStuck ? 2547 : null,
         isStuck,
         query_start: new Date(Date.now() - durationSeconds * 1000).toISOString()
       };
