@@ -308,8 +308,24 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
 
       {/* ================= MAIN CONTENT PANEL (INFORMACÕES DO SERVIDOR & BANCOS) ================= */}
       <main className="flex-1 space-y-6 min-w-0">
-        {/* Active Server Identity Card */}
-        {activeServer && (
+        {!activeServer ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-4 my-6">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
+              <Server className="w-8 h-8" />
+            </div>
+            <h2 className="text-lg font-bold text-white">Nenhum Servidor Selecionado</h2>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Sua lista de servidores está vazia. Adicione o seu servidor PostgreSQL para consultar via SQL a versão e todos os bancos instalados.
+            </p>
+            <button
+              onClick={handleAddNewServerClick}
+              className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors cursor-pointer inline-flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Adicionar Primeiro Servidor</span>
+            </button>
+          </div>
+        ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
               <div>

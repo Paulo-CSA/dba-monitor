@@ -40,49 +40,54 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
 
     // 1. Fetch exact PostgreSQL version via SELECT version();
     const versionRes = await client.query('SELECT version();');
-    const fullVersionStr = versionRes.rows[0]?.version || 'PostgreSQL (Desconhecido)';
+    const fullVersionStr = versionRes.rows[0]?.version || '';
     
-    // Extract version number, e.g., "PostgreSQL 16.2" or "PostgreSQL 14.8"
+    // Friendly version format from SELECT version();
     const versionMatch = fullVersionStr.match(/PostgreSQL\s+([\d\.]+)/i);
-    const friendlyVersion = versionMatch ? `PostgreSQL ${versionMatch[1]}` : fullVersionStr;
+    const friendlyVersion = versionMatch ? `PostgreSQL ${versionMatch[1]}` : (fullVersionStr.split(' on ')[0] || fullVersionStr);
 
-    // 2. Fetch ALL databases on this server robustly
+    // 2. Fetch ALL databases on this server strictly via SQL pg_database query
     const dbQuery = `
       SELECT 
-        d.datname,
-        pg_encoding_to_char(d.encoding) as encoding,
-        pg_get_userbyid(d.datdba) as owner
-      FROM pg_database d
-      WHERE d.datistemplate = false
+        datname AS nome_do_banco,
+        pg_encoding_to_char(encoding) as encoding,
+        pg_get_userbyid(datdba) as owner
+      FROM pg_database
+      WHERE datistemplate = false
       ORDER BY 
-        CASE WHEN d.datname = 'postgres' THEN 1 ELSE 0 END,
-        d.datname ASC;
+        CASE WHEN datname = 'postgres' THEN 1 ELSE 0 END,
+        datname ASC;
     `;
     const dbRes = await client.query(dbQuery);
 
     const databases: DatabaseInfo[] = [];
     for (const row of dbRes.rows) {
-      let bytes = 1024 * 1024 * 500; // Default 500MB
+      const dbName = row.nome_do_banco || row.datname;
+      let bytes = 0;
       try {
-        const sizeRes = await client.query(`SELECT pg_database_size($1) as size_bytes;`, [row.datname]);
-        bytes = parseInt(sizeRes.rows[0]?.size_bytes, 10) || bytes;
+        const sizeRes = await client.query(`SELECT pg_database_size($1) as size_bytes;`, [dbName]);
+        bytes = parseInt(sizeRes.rows[0]?.size_bytes, 10) || 0;
       } catch {
-        // Restricted permission on size query for this db
+        // Restricted permission on size query
       }
 
-      let formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      if (bytes >= 1024 * 1024 * 1024) {
-        formattedSize = `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+      let formattedSize = '0 MB';
+      if (bytes > 0) {
+        if (bytes >= 1024 * 1024 * 1024) {
+          formattedSize = `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+        } else {
+          formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
       }
 
       databases.push({
-        datname: row.datname,
+        datname: dbName,
         sizeBytes: bytes,
         sizeFormatted: formattedSize,
-        activeConnections: 3,
+        activeConnections: 1,
         maxConnections: 100,
-        tps: 15,
-        cacheHitRatio: 99.8,
+        tps: 0,
+        cacheHitRatio: 100,
         owner: row.owner || params.dbUser,
         encoding: row.encoding || 'UTF8',
         status: 'online'

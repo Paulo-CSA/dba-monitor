@@ -75,7 +75,31 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
     (servers.reduce((acc, s) => acc + s.avgLatencyMs, 0) / (totalServers || 1)).toFixed(2)
   );
 
-  // Top 5 servers by query volume / TPS
+  // Render empty state if no servers are registered
+  if (totalServers === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-4 max-w-2xl mx-auto my-12">
+          <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
+            <Server className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Nenhum Servidor PostgreSQL Cadastrado</h2>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            Adicione seu primeiro servidor PostgreSQL para que a aplicação realize a consulta via SQL do <code>SELECT version();</code> e recupere automaticamente os bancos de dados cadastrados.
+          </p>
+          <div className="pt-2">
+            <button
+              onClick={() => onSwitchTab?.('add_server')}
+              className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors cursor-pointer inline-flex items-center space-x-2"
+            >
+              <Server className="w-4 h-4" />
+              <span>Adicionar Servidor PostgreSQL</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const topTpsServers = [...servers]
     .map((s) => ({
       name: s.name.length > 20 ? s.name.substring(0, 18) + '...' : s.name,

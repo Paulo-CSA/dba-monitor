@@ -58,143 +58,33 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
       if (data.success && data.isLive) {
         const detectedDbs: DatabaseInfo[] = data.databases || [];
-        const versionStr = data.pgVersion || 'PostgreSQL 16.2';
+        const versionStr = data.pgVersion || 'PostgreSQL';
         setTestStatus({
           success: true,
-          message: `Conexão efetuada! Versão identificada via SELECT version(): ${versionStr}. ${detectedDbs.length} banco(s) retornado(s).`,
+          message: `Conexão efetuada com sucesso! Versão obtida via SELECT version(): ${versionStr}. ${detectedDbs.length} banco(s) retornado(s) via SELECT datname FROM pg_database.`,
           pgVersion: versionStr,
           liveDatabases: detectedDbs,
           liveQueries: data.stuckQueries
         });
-        return { pgVersion: versionStr, databases: detectedDbs, queries: data.stuckQueries };
+        return { success: true, pgVersion: versionStr, databases: detectedDbs, queries: data.stuckQueries };
       } else {
-        // Fallback auto-detection for sandbox or unreachable internal IPs
-        const autoDetectedDbs: DatabaseInfo[] = [
-          {
-            datname: 'meubanco_prod',
-            sizeBytes: 4.5 * 1024 * 1024 * 1024,
-            sizeFormatted: '4.5 GB',
-            activeConnections: 12,
-            maxConnections: 100,
-            tps: 140,
-            cacheHitRatio: 99.8,
-            owner: user || 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          },
-          {
-            datname: 'vendas',
-            sizeBytes: 2.1 * 1024 * 1024 * 1024,
-            sizeFormatted: '2.1 GB',
-            activeConnections: 6,
-            maxConnections: 80,
-            tps: 65,
-            cacheHitRatio: 99.6,
-            owner: user || 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          },
-          {
-            datname: 'financeiro',
-            sizeBytes: 1.8 * 1024 * 1024 * 1024,
-            sizeFormatted: '1.8 GB',
-            activeConnections: 4,
-            maxConnections: 50,
-            tps: 30,
-            cacheHitRatio: 99.9,
-            owner: user || 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          },
-          {
-            datname: 'clientes',
-            sizeBytes: 850 * 1024 * 1024,
-            sizeFormatted: '850 MB',
-            activeConnections: 3,
-            maxConnections: 50,
-            tps: 20,
-            cacheHitRatio: 99.7,
-            owner: user || 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          },
-          {
-            datname: 'logs',
-            sizeBytes: 620 * 1024 * 1024,
-            sizeFormatted: '620 MB',
-            activeConnections: 2,
-            maxConnections: 50,
-            tps: 15,
-            cacheHitRatio: 99.5,
-            owner: user || 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          },
-          {
-            datname: 'postgres',
-            sizeBytes: 350 * 1024 * 1024,
-            sizeFormatted: '350 MB',
-            activeConnections: 1,
-            maxConnections: 50,
-            tps: 1,
-            cacheHitRatio: 99.9,
-            owner: 'postgres',
-            encoding: 'UTF8',
-            status: 'online'
-          }
-        ];
-        const autoVersion = 'PostgreSQL 16.2';
-
+        const errMsg = data.message || data.error || 'Não foi possível conectar ao servidor PostgreSQL informado. Verifique Host, Porta e Credenciais.';
         setTestStatus({
-          success: true,
-          message: `Servidor cadastrado! Versão identificada: ${autoVersion}. ${autoDetectedDbs.length} bancos identificados no servidor.`,
-          pgVersion: autoVersion,
-          liveDatabases: autoDetectedDbs
+          success: false,
+          message: errMsg,
+          liveDatabases: []
         });
-        return { pgVersion: autoVersion, databases: autoDetectedDbs, queries: [] };
+        return { success: false, pgVersion: '', databases: [], queries: [] };
       }
     } catch (err) {
       setIsTesting(false);
-      const autoDetectedDbs: DatabaseInfo[] = [
-        {
-          datname: 'meubanco_prod',
-          sizeBytes: 4.5 * 1024 * 1024 * 1024,
-          sizeFormatted: '4.5 GB',
-          activeConnections: 10,
-          maxConnections: 100,
-          tps: 120,
-          cacheHitRatio: 99.8,
-          owner: user || 'postgres',
-          encoding: 'UTF8',
-          status: 'online'
-        },
-        {
-          datname: 'vendas',
-          sizeBytes: 2.1 * 1024 * 1024 * 1024,
-          sizeFormatted: '2.1 GB',
-          activeConnections: 5,
-          maxConnections: 80,
-          tps: 50,
-          cacheHitRatio: 99.6,
-          owner: user || 'postgres',
-          encoding: 'UTF8',
-          status: 'online'
-        },
-        {
-          datname: 'postgres',
-          sizeBytes: 350 * 1024 * 1024,
-          sizeFormatted: '350 MB',
-          activeConnections: 1,
-          maxConnections: 50,
-          tps: 1,
-          cacheHitRatio: 99.9,
-          owner: 'postgres',
-          encoding: 'UTF8',
-          status: 'online'
-        }
-      ];
-      const autoVersion = 'PostgreSQL 16.2';
-      return { pgVersion: autoVersion, databases: autoDetectedDbs, queries: [] };
+      const errMsg = `Erro de comunicação: ${(err as Error).message}`;
+      setTestStatus({
+        success: false,
+        message: errMsg,
+        liveDatabases: []
+      });
+      return { success: false, pgVersion: '', databases: [], queries: [] };
     }
   };
 
@@ -207,11 +97,18 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     let databases = testStatus?.liveDatabases;
     let queries = testStatus?.liveQueries;
 
-    if (!databases || databases.length === 0) {
+    if (!testStatus || (!databases && !testStatus.success)) {
       const res = await performAutoQuery();
+      if (!res.success) {
+        return; // Don't save if connection failed
+      }
       versionStr = res.pgVersion;
       databases = res.databases;
       queries = res.queries;
+    }
+
+    if (testStatus && !testStatus.success) {
+      return; // Cannot save invalid/unreachable server
     }
 
     const primaryDb = databases && databases.length > 0 ? databases[0].datname : 'postgres';
@@ -224,10 +121,10 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         user,
         password,
         database: primaryDb,
-        pgVersion: versionStr || 'PostgreSQL 16.2',
+        pgVersion: versionStr || 'PostgreSQL',
         environment,
-        liveDatabases: databases,
-        liveQueries: queries
+        liveDatabases: databases || [],
+        liveQueries: queries || []
       });
     } else {
       onClose();

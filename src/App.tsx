@@ -40,8 +40,8 @@ export default function App() {
 
   // Fleet & Observability States
   const [fleetServers, setFleetServers] = useState<ServerInstance[]>([]);
-  const [selectedServerId, setSelectedServerId] = useState<string>('srv-prod-us-01');
-  const [selectedDatabaseName, setSelectedDatabaseName] = useState<string>('production_db');
+  const [selectedServerId, setSelectedServerId] = useState<string>('');
+  const [selectedDatabaseName, setSelectedDatabaseName] = useState<string>('');
 
   // Core Data States
   const [metrics, setMetrics] = useState<RealtimeMetricsPayload | null>(null);
@@ -355,29 +355,18 @@ export default function App() {
     liveQueries?: any[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
-    const serverPgVersion = serverData.pgVersion || 'PostgreSQL 16.2';
+    const serverPgVersion = serverData.pgVersion || 'PostgreSQL';
 
     const defaultDbName = serverData.database || 'postgres';
-    const databasesList: DatabaseInfo[] =
-      serverData.liveDatabases && serverData.liveDatabases.length > 0
-        ? serverData.liveDatabases
-        : [
-            {
-              datname: defaultDbName,
-              sizeBytes: 1.5 * 1024 * 1024 * 1024,
-              sizeFormatted: '1.5 GB',
-              activeConnections: 5,
-              maxConnections: 100,
-              tps: 60,
-              cacheHitRatio: 99.8,
-              owner: serverData.user || 'postgres',
-              encoding: 'UTF8',
-              status: 'online'
-            }
-          ];
+    const databasesList: DatabaseInfo[] = serverData.liveDatabases || [];
 
-    // Primary database is strictly the first database returned
+    // Primary database is strictly the first database returned or defaultDbName
     const primaryDb = databasesList[0]?.datname || defaultDbName;
+
+    const totalBytesSum = databasesList.reduce((acc, d) => acc + (d.sizeBytes || 0), 0);
+    const sizeFormatted = totalBytesSum >= 1024 * 1024 * 1024
+      ? `${(totalBytesSum / (1024 * 1024 * 1024)).toFixed(2)} GB`
+      : `${(totalBytesSum / (1024 * 1024)).toFixed(1)} MB`;
 
     const newServer: ServerInstance = {
       id: newServerId,
@@ -389,11 +378,11 @@ export default function App() {
       environment: serverData.environment || 'Produção',
       pgVersion: serverPgVersion,
       uptimeFormatted: '1d 0h',
-      cpuUsagePercent: 12,
-      avgLatencyMs: 1.5,
+      cpuUsagePercent: 0,
+      avgLatencyMs: 0,
       totalDatabasesCount: databasesList.length,
-      totalActiveConnections: databasesList.reduce((acc, d) => acc + d.activeConnections, 0),
-      totalSizeFormatted: `${(databasesList.reduce((acc, d) => acc + d.sizeBytes, 0) / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+      totalActiveConnections: databasesList.reduce((acc, d) => acc + (d.activeConnections || 0), 0),
+      totalSizeFormatted: sizeFormatted,
       status: 'healthy',
       databases: databasesList
     };

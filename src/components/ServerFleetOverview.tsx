@@ -19,6 +19,20 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
   onSelectDatabase
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  if (servers.length === 0) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-4 my-6 max-w-xl mx-auto">
+        <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
+          <Server className="w-8 h-8" />
+        </div>
+        <h2 className="text-base font-bold text-white">Nenhum Servidor PostgreSQL Cadastrado</h2>
+        <p className="text-xs text-slate-400">
+          Você não possui servidores de banco de dados na frota. Adicione um servidor para ver seus bancos de dados e telemetria.
+        </p>
+      </div>
+    );
+  }
+
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
 
   // Filter servers and their databases by search
