@@ -136,29 +136,37 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
-              {backupOverview.recentBackups.map((bkp) => (
-                <tr key={bkp.id} className="hover:bg-slate-800/40">
-                  <td className="py-3 px-4 font-mono font-bold text-cyan-300">{bkp.id}</td>
-                  <td className="py-3 px-4 font-mono text-slate-300">
-                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
-                      {bkp.type}
-                    </span>
+              {backupOverview.recentBackups.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500 font-mono">
+                    Nenhum backup registrado até o momento. Clique em &quot;Iniciar Backup&quot; para disparar um backup manual.
                   </td>
-                  <td className="py-3 px-4 text-slate-300 font-mono">{formatDateTime(bkp.startTime)}</td>
-                  <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
-                  <td className="py-3 px-4 font-mono">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                        {bkp.status.toUpperCase()}
-                      </span>
-                      {bkp.verifiedIntegrity && (
-                        <span className="text-[10px] text-cyan-400 font-semibold">(Integridade OK)</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 font-mono text-slate-400 truncate max-w-xs">{bkp.location}</td>
                 </tr>
-              ))}
+              ) : (
+                backupOverview.recentBackups.map((bkp) => (
+                  <tr key={bkp.id} className="hover:bg-slate-800/40">
+                    <td className="py-3 px-4 font-mono font-bold text-cyan-300">{bkp.id}</td>
+                    <td className="py-3 px-4 font-mono text-slate-300">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
+                        {bkp.type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-300 font-mono">{formatDateTime(bkp.startTime)}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
+                    <td className="py-3 px-4 font-mono">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                          {bkp.status.toUpperCase()}
+                        </span>
+                        {bkp.verifiedIntegrity && (
+                          <span className="text-[10px] text-cyan-400 font-semibold">(Integridade OK)</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-400 truncate max-w-xs">{bkp.location}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

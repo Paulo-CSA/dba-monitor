@@ -205,60 +205,15 @@ export function createInitialActiveLocks(): ActiveLock[] {
 }
 
 export function createInitialBackupOverview(): BackupOverview {
-  const now = new Date();
-  const lastBackup = new Date(now.getTime() - 4 * 3600 * 1000); // 4 hours ago
-
   return {
-    lastBackupTimestamp: lastBackup.toISOString(),
-    timeSinceLastBackupFormatted: '4h 12m atrás',
+    lastBackupTimestamp: '',
+    timeSinceLastBackupFormatted: 'Nenhum backup',
     backupHealthStatus: 'healthy',
-    totalBackupSizeFormatted: '142.8 GB',
+    totalBackupSizeFormatted: '0 MB',
     walArchiveStatus: 'active',
-    walArchivedCount: 1842,
+    walArchivedCount: 0,
     retentionPolicyDays: 30,
-    recentBackups: [
-      {
-        id: 'bkp-2026-08-07-0600',
-        type: 'pg_basebackup',
-        status: 'completed',
-        startTime: new Date(now.getTime() - 4 * 3600 * 1000).toISOString(),
-        endTime: new Date(now.getTime() - 3.8 * 3600 * 1000).toISOString(),
-        durationSeconds: 720,
-        sizeBytes: 153328222208,
-        sizeFormatted: '142.8 GB',
-        location: 's3://pg-backups-prod/2026/08/07/full_base.tar.gz',
-        checksum: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        verifiedIntegrity: true,
-        notes: 'Backup diário completo automatizado.'
-      },
-      {
-        id: 'bkp-2026-08-06-0600',
-        type: 'pg_basebackup',
-        status: 'completed',
-        startTime: new Date(now.getTime() - 28 * 3600 * 1000).toISOString(),
-        endTime: new Date(now.getTime() - 27.8 * 3600 * 1000).toISOString(),
-        durationSeconds: 710,
-        sizeBytes: 151120000000,
-        sizeFormatted: '140.7 GB',
-        location: 's3://pg-backups-prod/2026/08/06/full_base.tar.gz',
-        checksum: 'sha256:8f4e2c8a1b0d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f',
-        verifiedIntegrity: true
-      },
-      {
-        id: 'bkp-2026-08-05-1800',
-        type: 'pg_dump',
-        status: 'completed',
-        startTime: new Date(now.getTime() - 40 * 3600 * 1000).toISOString(),
-        endTime: new Date(now.getTime() - 39.5 * 3600 * 1000).toISOString(),
-        durationSeconds: 1800,
-        sizeBytes: 42000000000,
-        sizeFormatted: '39.1 GB',
-        location: 's3://pg-backups-prod/2026/08/05/logical_schema.sql.gz',
-        checksum: 'sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-        verifiedIntegrity: true,
-        notes: 'Exportação lógica de esquemas críticos.'
-      }
-    ]
+    recentBackups: []
   };
 }
 

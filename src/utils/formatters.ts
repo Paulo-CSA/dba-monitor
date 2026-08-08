@@ -24,8 +24,10 @@ export function formatDurationSeconds(seconds: number): string {
 }
 
 export function formatDateTime(isoString: string): string {
+  if (!isoString) return '-';
   try {
     const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString || '-';
     return d.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -35,7 +37,7 @@ export function formatDateTime(isoString: string): string {
       second: '2-digit'
     });
   } catch {
-    return isoString;
+    return isoString || '-';
   }
 }
 
