@@ -249,3 +249,81 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
     };
   }
 }
+
+export async function fetchLiveConnectionsForDb(params: {
+  host?: string;
+  port?: number;
+  dbUser?: string;
+  dbPassword?: string;
+  database?: string;
+}): Promise<{ success: boolean; queries: StuckQuery[]; count: number; message?: string }> {
+  if (!params.host || params.host === '127.0.0.1' || params.host === 'localhost') {
+    return { success: false, queries: [], count: 0, message: 'Host local sem conexão TCP remota' };
+  }
+
+  const client = new pg.Client({
+    host: params.host,
+    port: params.port || 5432,
+    user: params.dbUser || 'postgres',
+    password: params.dbPassword || '',
+    database: params.database || 'postgres',
+    connectionTimeoutMillis: 3500,
+    statement_timeout: 4000
+  });
+
+  try {
+    await client.connect();
+    const dbFilter = params.database ? params.database.replace(/'/g, "''") : '';
+    const activityQuery = `
+      SELECT 
+        pid,
+        usename,
+        datname,
+        COALESCE(client_addr::text, '${params.host}') as client_addr,
+        COALESCE(application_name, 'DBeaver / PostgreSQL Client') as application_name,
+        state,
+        query,
+        ROUND(COALESCE(EXTRACT(epoch FROM (now() - query_start)), 0)::numeric, 1) as duration_seconds,
+        wait_event_type,
+        wait_event
+      FROM pg_stat_activity
+      WHERE pid != pg_backend_pid()
+        AND query NOT LIKE '%pg_stat_activity%'
+        ${dbFilter ? `AND datname = '${dbFilter}'` : ''}
+      ORDER BY duration_seconds DESC
+      LIMIT 100;
+    `;
+
+    const res = await client.query(activityQuery);
+    await client.end();
+
+    const queries: StuckQuery[] = res.rows.map((r) => ({
+      pid: Number(r.pid),
+      usename: r.usename || params.dbUser || 'postgres',
+      datname: r.datname || params.database || 'postgres',
+      client_addr: r.client_addr,
+      application_name: r.application_name,
+      state: r.state || 'active',
+      query: r.query || 'SELECT 1;',
+      durationSeconds: parseFloat(r.duration_seconds) || 0,
+      wait_event_type: r.wait_event_type || null,
+      wait_event: r.wait_event || null,
+      blocking_pid: null,
+      isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
+      query_start: new Date().toISOString()
+    }));
+
+    return {
+      success: true,
+      queries,
+      count: queries.length
+    };
+  } catch (err) {
+    try {
+      await client.end();
+    } catch {}
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, queries: [], count: 0, message: msg };
+  }
+}
+

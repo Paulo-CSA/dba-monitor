@@ -10,7 +10,8 @@ import { lockAnalyzerSingleton } from './src/services/lockAnalyzer';
 import { backupMonitorSingleton } from './src/services/backupMonitor';
 import { alertEngineSingleton } from './src/services/alertEngine';
 import { mockServerFleet } from './src/services/fleetService';
-import { testAndFetchLivePgData } from './src/services/pgLiveService';
+import pg from 'pg';
+import { testAndFetchLivePgData, fetchLiveConnectionsForDb } from './src/services/pgLiveService';
 import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
@@ -184,13 +185,71 @@ async function startServer() {
     res.json(locksData);
   });
 
+  // Fetch live active connections specifically for a database
+  app.post('/api/db/fetch-live-connections', async (req, res) => {
+    const { host, port, dbUser, dbPassword, database, serverId } = req.body;
+    
+    let targetHost = host;
+    let targetPort = port;
+    let targetUser = dbUser;
+    let targetPassword = dbPassword;
+
+    if (serverId && typeof serverId === 'string') {
+      const foundSrv = activeServersStore.find((s) => s.id === serverId);
+      if (foundSrv) {
+        targetHost = targetHost || foundSrv.host;
+        targetPort = targetPort || foundSrv.port;
+        targetUser = targetUser || foundSrv.dbUser;
+        targetPassword = targetPassword || foundSrv.dbPassword;
+      }
+    }
+
+    const result = await fetchLiveConnectionsForDb({
+      host: targetHost,
+      port: Number(targetPort) || 5432,
+      dbUser: targetUser,
+      dbPassword: targetPassword,
+      database
+    });
+
+    res.json(result);
+  });
+
   // Kill stuck backend session (SELECT pg_terminate_backend(pid))
-  app.post('/api/db/kill-pid', (req, res) => {
-    const { pid } = req.body;
+  app.post('/api/db/kill-pid', async (req, res) => {
+    const { pid, host, port, dbUser, dbPassword, database } = req.body;
     if (!pid || typeof pid !== 'number') {
       res.status(400).json({ success: false, message: 'PID numérico inválido.' });
       return;
     }
+
+    // Try live pg termination if external host provided
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      const client = new pg.Client({
+        host,
+        port: Number(port) || 5432,
+        user: dbUser || 'postgres',
+        password: dbPassword || '',
+        database: database || 'postgres',
+        connectionTimeoutMillis: 3500
+      });
+
+      try {
+        await client.connect();
+        await client.query(`SELECT pg_terminate_backend($1);`, [pid]);
+        await client.end();
+        lockAnalyzerSingleton.killBackendPid(pid);
+        res.json({
+          success: true,
+          message: `Comando SELECT pg_terminate_backend(${pid}) executado no banco ${database || 'postgres'}. Sessão encerrada.`
+        });
+        return;
+      } catch (err) {
+        try { await client.end(); } catch {}
+        console.error('Error executing pg_terminate_backend on live server:', err);
+      }
+    }
+
     const result = lockAnalyzerSingleton.killBackendPid(pid);
     res.json(result);
   });

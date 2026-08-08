@@ -128,6 +128,63 @@ export default function App() {
     fetchInitialStaticData();
   }, [fetchInitialStaticData]);
 
+  const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
+  const activeDb = activeServerObject
+    ? activeServerObject.databases.find((d) => d.datname === selectedDatabaseName) || activeServerObject.databases[0]
+    : undefined;
+
+  // Fetch live active connections for current server and database
+  const fetchLiveConnectionsForActiveDb = useCallback(async () => {
+    if (!activeServerObject) return;
+    const targetDb = activeDb ? activeDb.datname : selectedDatabaseName || activeServerObject.databases[0]?.datname || 'postgres';
+
+    try {
+      const res = await fetch('/api/db/fetch-live-connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: activeServerObject.host,
+          port: activeServerObject.port,
+          dbUser: activeServerObject.dbUser,
+          dbPassword: activeServerObject.dbPassword,
+          database: targetDb,
+          serverId: activeServerObject.id
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.queries)) {
+          setStuckQueries(data.queries);
+          setFleetServers((prev) =>
+            prev.map((srv) =>
+              srv.id === activeServerObject.id
+                ? { ...srv, stuckQueries: data.queries }
+                : srv
+            )
+          );
+        } else {
+          // If not live PG TCP or in simulation mode, fetch default simulation state
+          const lockRes = await fetch('/api/db/locks');
+          if (lockRes.ok) {
+            const lData = await lockRes.json();
+            setStuckQueries(lData.stuckQueries || []);
+            setActiveLocks(lData.activeLocks || []);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching live connections:', err);
+    }
+  }, [activeServerObject, activeDb, selectedDatabaseName]);
+
+  // Re-fetch live connections when active server or database changes
+  useEffect(() => {
+    if (selectedServerId && selectedDatabaseName) {
+      fetchLiveConnectionsForActiveDb();
+    }
+  }, [selectedServerId, selectedDatabaseName, fetchLiveConnectionsForActiveDb]);
+
   // Real-time Polling Engine
   useEffect(() => {
     if (!isLive) return;
@@ -141,13 +198,14 @@ export default function App() {
           setActiveAlerts(data.alerts || []);
           setIsLoadSpike(data.isLoadSpike);
         }
+        await fetchLiveConnectionsForActiveDb();
       } catch (err) {
         console.error('Metrics fetch error:', err);
       }
     }, refreshIntervalMs);
 
     return () => clearInterval(interval);
-  }, [isLive, refreshIntervalMs]);
+  }, [isLive, refreshIntervalMs, fetchLiveConnectionsForActiveDb]);
 
   // Handler for Toggling Load Spike
   const handleToggleLoadSpike = async () => {
@@ -180,12 +238,25 @@ export default function App() {
       }))
     );
 
+    const targetDb = activeDb ? activeDb.datname : selectedDatabaseName || 'postgres';
+
     try {
       await fetch('/api/db/kill-pid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pid })
+        body: JSON.stringify({
+          pid,
+          host: activeServerObject?.host,
+          port: activeServerObject?.port,
+          dbUser: activeServerObject?.dbUser,
+          dbPassword: activeServerObject?.dbPassword,
+          database: targetDb
+        })
       });
+
+      setTimeout(() => {
+        fetchLiveConnectionsForActiveDb();
+      }, 600);
     } catch (err) {
       console.error('Error terminating PID:', err);
     } finally {
@@ -472,11 +543,6 @@ export default function App() {
       console.error('Error saving connection server:', err);
     }
   };
-
-  const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
-  const activeDb = activeServerObject
-    ? activeServerObject.databases.find((d) => d.datname === selectedDatabaseName) || activeServerObject.databases[0]
-    : undefined;
 
   const activeServerMetrics = activeServerObject && metrics
     ? {
@@ -860,6 +926,7 @@ export default function App() {
           connectionsList={activeServerStuckQueries}
           serverHost={activeServerObject?.host || 'localhost'}
           killedPids={killedPids}
+          onRefresh={fetchLiveConnectionsForActiveDb}
           onKillPid={handleKillPid}
           onAnalyzeWithAi={handleAnalyzeWithAi}
           killingPid={killingPid}

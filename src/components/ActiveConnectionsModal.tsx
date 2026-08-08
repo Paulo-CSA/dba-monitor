@@ -14,6 +14,7 @@ interface ActiveConnectionsModalProps {
   connectionsList: StuckQuery[];
   serverHost?: string;
   killedPids?: number[];
+  onRefresh?: () => void | Promise<void>;
   onKillPid: (pid: number) => void;
   onAnalyzeWithAi: (query: StuckQuery) => void;
   killingPid: number | null;
@@ -30,6 +31,7 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
   connectionsList,
   serverHost,
   killedPids = [],
+  onRefresh,
   onKillPid,
   onAnalyzeWithAi,
   killingPid
@@ -37,14 +39,23 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
   const [filterText, setFilterText] = useState('');
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'idle' | 'waiting'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
 
   if (!isOpen) return null;
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
+    setLastRefreshedAt(new Date());
+    if (onRefresh) {
+      try {
+        await onRefresh();
+      } catch (err) {
+        console.error('Error refreshing connections in modal:', err);
+      }
+    }
     setTimeout(() => {
       setIsRefreshing(false);
-    }, 600);
+    }, 500);
   };
 
   // Ensure active sessions exist for the selected databaseName with unique PIDs and proper host IP
@@ -170,12 +181,20 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Ativo:</span>
+              <span className="text-cyan-400 font-bold">{lastRefreshedAt.toLocaleTimeString()}</span>
+            </div>
+
             <button
               onClick={handleRefresh}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-              title="Atualizar lista de conexões"
+              disabled={isRefreshing}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+              title="Executar SELECT * FROM pg_stat_activity no banco selecionado"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+              <span>Atualizar Conexões</span>
             </button>
 
             <button
