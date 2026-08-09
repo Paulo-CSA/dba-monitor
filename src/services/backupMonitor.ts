@@ -29,7 +29,7 @@ export class BackupMonitor {
       : optsOrType;
 
     const type = opts.type;
-    const srvName = opts.serverName || opts.serverHost || opts.serverId || 'servidor_padrão';
+    const srvName = opts.serverName || opts.serverHost || opts.serverId || 'servidor_padrao';
     const dbName = opts.databaseName || 'postgres';
 
     const srvClean = srvName.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -40,13 +40,30 @@ export class BackupMonitor {
     const timestampStr = now.toISOString().replace(/[:.]/g, '-');
     const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
 
-    let requestedLocation = opts.customPath && opts.customPath.trim().length > 0
-      ? opts.customPath.trim()
-      : `/var/backups/postgresql/${srvClean}/${dbClean}/${defaultFilename}`;
+    let baseDir = `/var/backups/postgresql/${srvClean}/${dbClean}`;
+    let filename = defaultFilename;
 
-    if (requestedLocation.endsWith('/') || requestedLocation.endsWith('\\')) {
-      requestedLocation = path.join(requestedLocation, defaultFilename);
+    if (opts.customPath && opts.customPath.trim().length > 0) {
+      const rawPath = opts.customPath.trim();
+      if (rawPath.endsWith('/') || rawPath.endsWith('\\')) {
+        if (rawPath.includes(srvClean)) {
+          baseDir = rawPath;
+        } else {
+          baseDir = path.join(rawPath, srvClean, dbClean);
+        }
+      } else {
+        const parsedDir = path.dirname(rawPath);
+        const parsedFile = path.basename(rawPath);
+        filename = parsedFile;
+        if (parsedDir.includes(srvClean)) {
+          baseDir = parsedDir;
+        } else {
+          baseDir = path.join(parsedDir, srvClean, dbClean);
+        }
+      }
     }
+
+    let requestedLocation = path.join(baseDir, filename);
 
     let actualSavedLocation = requestedLocation;
     let savedOnDisk = false;

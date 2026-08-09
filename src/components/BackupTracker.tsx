@@ -27,13 +27,13 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [customPath, setCustomPath] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'selected'>('all');
 
-  const srvFolder = server ? (server.name || server.host).replace(/[^a-zA-Z0-9_-]/g, '_') : 'servidor_padrão';
+  const srvFolder = server ? (server.name || server.host).replace(/[^a-zA-Z0-9_-]/g, '_') : 'servidor_padrao';
   const dbFolder = (databaseName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
   const defaultPath = `/var/backups/postgresql/${srvFolder}/${dbFolder}/`;
 
   useEffect(() => {
     setCustomPath(defaultPath);
-  }, [server?.id, server?.name, databaseName]);
+  }, [server?.id, server?.name, server?.host, databaseName]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
 
