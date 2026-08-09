@@ -43,10 +43,10 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const srvFolder = currentServerName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const dbFolder = currentDbName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const defaultPath = `/database/backups/postgresql/${srvFolder}/${dbFolder}/`;
+  const defaultPath = `/backups/postgresql/${srvFolder}/${dbFolder}/`;
 
   useEffect(() => {
-    setCustomPath(`/database/backups/postgresql/${srvFolder}/${dbFolder}/`);
+    setCustomPath(`/backups/postgresql/${srvFolder}/${dbFolder}/`);
   }, [server?.id, server?.name, server?.host, databaseName, srvFolder, dbFolder]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
@@ -156,7 +156,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                     if (foundSrv) {
                       const sName = (foundSrv.name || foundSrv.host).replace(/[^a-zA-Z0-9_-]/g, '_');
                       const dName = (foundSrv.databases[0]?.datname || currentDbName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
-                      setCustomPath(`/database/backups/postgresql/${sName}/${dName}/`);
+                      setCustomPath(`/backups/postgresql/${sName}/${dName}/`);
                     }
                   }}
                   className="bg-slate-900 border border-slate-700 text-white text-xs font-bold font-mono rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
@@ -303,7 +303,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                   const db = bkp.databaseName || 'postgres';
                   const cmdStr = bkp.command || (bkp.type === 'pg_dump'
                     ? `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
-                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}" -F t -z`);
+                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}"`);
 
                   return (
                     <tr key={bkp.id} className="hover:bg-slate-800/40">

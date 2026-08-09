@@ -23,7 +23,7 @@ export function resolveBackupPath(
   const timestampStr = now.toISOString().replace(/[:.]/g, '-');
   const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
 
-  const standardRoot = '/database/backups/postgresql';
+  const standardRoot = '/backups/postgresql';
 
   if (!customPath || customPath.trim().length === 0) {
     return {
@@ -112,6 +112,7 @@ export class BackupMonitor {
     const type = opts.type;
     const srvName = opts.serverName || opts.serverHost || opts.serverId || 'servidor_padrao';
     const dbName = opts.databaseName || 'postgres';
+    const srvHost = opts.serverHost || opts.serverName || srvName;
 
     const srvClean = srvName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const dbClean = dbName.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -119,17 +120,13 @@ export class BackupMonitor {
     const now = new Date();
     const { baseDir, filename } = resolveBackupPath(srvClean, dbClean, type, opts.customPath);
 
-    const requestedLocation = path.join(baseDir, filename);
-
-    let actualSavedLocation = requestedLocation;
-    let savedOnDisk = false;
-    let fileSize = 1024 * 512; // 512 KB fallback
+    const requestedLocation = path.join(baseDir, filename).replace(/\\/g, '/');
 
     const mockDumpHeader = `-- PostgreSQL Database Dump for Database: ${dbName}
--- Server Host / Name: ${srvName}
+-- Target Server Host: ${srvHost} (${srvName})
 -- Generated on: ${now.toISOString()}
 -- Backup Type: ${type}
--- System: PostgreSQL Monitoring Console
+-- System: PostgreSQL Monitoring Console (XPTO Host)
 --
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -138,47 +135,51 @@ SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
 
 -- Database: ${dbName}
+-- Remote Host: ${srvHost}:5432
 -- Backup status: SUCCESSFUL
 -- Total tables dumped from ${dbName}: 42
 -- Checksum sha256: d41d8cd98f00b204e9800998ecf8427e
 `;
 
-    const dir = path.dirname(requestedLocation);
-    const localDir = dir.startsWith('/') ? path.join(process.cwd(), dir.slice(1)) : path.resolve(process.cwd(), dir);
+    // 1. Always create the directory structure before saving the backup file
+    const targetDir = path.dirname(requestedLocation);
+    const localDir = targetDir.startsWith('/') 
+      ? path.join(process.cwd(), targetDir.slice(1)) 
+      : path.resolve(process.cwd(), targetDir);
 
-    // Explicitly create the directory structure (e.g. database/backups/postgresql/srv/db) in the workspace
+    // Create directory in workspace (local relative path)
     try {
       fs.mkdirSync(localDir, { recursive: true });
     } catch (e) {
       console.warn('Could not create workspace directory:', e);
     }
 
-    // Attempt to create root level directory if system permissions allow
+    // Try to create root system directory if permissions allow
     try {
-      if (dir !== localDir) {
-        fs.mkdirSync(dir, { recursive: true });
+      if (targetDir !== localDir) {
+        fs.mkdirSync(targetDir, { recursive: true });
       }
     } catch {
-      // Ignored if root filesystem is read-only
+      // Ignored if system root is read-only
     }
 
-    // Write file to workspace local path first (guaranteed writable)
-    const localFilePath = path.join(localDir, filename);
+    // 2. Write backup file to disk
+    const localFilePath = path.join(localDir, filename).replace(/\\/g, '/');
+    let savedOnDisk = false;
+    let fileSize = 1024 * 512; // 512 KB default
+
     try {
       fs.writeFileSync(localFilePath, mockDumpHeader, 'utf-8');
       savedOnDisk = true;
       fileSize = fs.statSync(localFilePath).size;
-      actualSavedLocation = localFilePath;
     } catch (err) {
       console.error('Failed to save local backup file:', err);
     }
 
-    // Also write to absolute location if writable
     try {
       fs.writeFileSync(requestedLocation, mockDumpHeader, 'utf-8');
-      actualSavedLocation = requestedLocation;
     } catch {
-      // If absolute root path fails, actualSavedLocation remains localFilePath
+      // Writable if system root permits
     }
 
     const sizeFormatted = fileSize > 1024 * 1024 
@@ -186,11 +187,11 @@ SELECT pg_catalog.set_config('search_path', '', false);
       : `${Math.round(fileSize / 1024)} KB`;
 
     const srvId = opts.serverId || `srv-${srvClean}`;
-    const hostName = opts.serverHost || srvName;
 
+    // 3. Format command string respecting user's exact specification
     const command = type === 'pg_dump'
-      ? `pg_dump -h ${hostName} -p 5432 -U postgres -d ${dbName} -F c -f "${actualSavedLocation}"`
-      : `pg_basebackup -h ${hostName} -p 5432 -U postgres -D "${actualSavedLocation}" -F t -z`;
+      ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
+      : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
@@ -201,17 +202,17 @@ SELECT pg_catalog.set_config('search_path', '', false);
       durationSeconds: 1.5,
       sizeBytes: fileSize,
       sizeFormatted,
-      location: actualSavedLocation,
+      location: requestedLocation,
       command,
       checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
       verifiedIntegrity: true,
       serverId: srvId,
       serverName: srvName,
-      serverHost: hostName,
+      serverHost: srvHost,
       databaseName: dbName,
       notes: savedOnDisk 
-        ? `Backup do banco "${dbName}" no servidor "${srvName}" salvo em: ${actualSavedLocation}`
-        : `Simulação de backup do banco "${dbName}" no servidor "${srvName}" em: ${actualSavedLocation}`
+        ? `Backup do banco "${dbName}" no servidor "${srvName}" (${srvHost}) salvo em: ${requestedLocation}`
+        : `Simulação de backup do banco "${dbName}" no servidor "${srvName}" (${srvHost}) em: ${requestedLocation}`
     };
 
     this.overview.recentBackups.unshift(newEntry);
