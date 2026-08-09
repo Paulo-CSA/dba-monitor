@@ -29,7 +29,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const srvFolder = server ? (server.name || server.host).replace(/[^a-zA-Z0-9_-]/g, '_') : 'servidor_padrao';
   const dbFolder = (databaseName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const defaultPath = `/var/backups/postgresql/${srvFolder}/${dbFolder}/`;
+  const defaultPath = `/database/backups/postgresql/${srvFolder}/${dbFolder}/`;
 
   useEffect(() => {
     setCustomPath(defaultPath);
