@@ -3,6 +3,15 @@ import { createInitialBackupOverview } from '../utils/mockGenerator';
 import fs from 'fs';
 import path from 'path';
 
+export interface TriggerBackupOptions {
+  type: 'pg_dump' | 'pg_basebackup';
+  customPath?: string;
+  serverId?: string;
+  serverName?: string;
+  serverHost?: string;
+  databaseName?: string;
+}
+
 export class BackupMonitor {
   private overview: BackupOverview;
 
@@ -14,24 +23,37 @@ export class BackupMonitor {
     return { ...this.overview };
   }
 
-  public triggerManualBackup(type: 'pg_dump' | 'pg_basebackup', customPath?: string): BackupEntry {
+  public triggerManualBackup(optsOrType: TriggerBackupOptions | 'pg_dump' | 'pg_basebackup', customPath?: string): BackupEntry {
+    const opts: TriggerBackupOptions = typeof optsOrType === 'string' 
+      ? { type: optsOrType, customPath } 
+      : optsOrType;
+
+    const type = opts.type;
+    const srvName = opts.serverName || opts.serverHost || opts.serverId || 'servidor_padrão';
+    const dbName = opts.databaseName || 'postgres';
+
+    const srvClean = srvName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dbClean = dbName.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    const ext = type === 'pg_dump' ? 'sql' : 'tar.gz';
     const now = new Date();
     const timestampStr = now.toISOString().replace(/[:.]/g, '-');
-    const defaultFilename = `manual_${type}_${timestampStr}.${type === 'pg_dump' ? 'sql' : 'tar.gz'}`;
+    const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
 
-    let requestedLocation = customPath && customPath.trim().length > 0
-      ? customPath.trim()
-      : `/var/backups/postgresql/${defaultFilename}`;
+    let requestedLocation = opts.customPath && opts.customPath.trim().length > 0
+      ? opts.customPath.trim()
+      : `/var/backups/postgresql/${srvClean}/${dbClean}/${defaultFilename}`;
 
     if (requestedLocation.endsWith('/') || requestedLocation.endsWith('\\')) {
-      requestedLocation = `${requestedLocation}${defaultFilename}`;
+      requestedLocation = path.join(requestedLocation, defaultFilename);
     }
 
     let actualSavedLocation = requestedLocation;
     let savedOnDisk = false;
     let fileSize = 1024 * 512; // 512 KB fallback
 
-    const mockDumpHeader = `-- PostgreSQL Database Dump
+    const mockDumpHeader = `-- PostgreSQL Database Dump for Database: ${dbName}
+-- Server Host / Name: ${srvName}
 -- Generated on: ${now.toISOString()}
 -- Backup Type: ${type}
 -- System: PostgreSQL Monitoring Console
@@ -42,9 +64,9 @@ SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
 
--- Data for Name: pg_stat_activity_archive; Type: TABLE DATA
+-- Database: ${dbName}
 -- Backup status: SUCCESSFUL
--- Total tables dumped: 42
+-- Total tables dumped from ${dbName}: 42
 -- Checksum sha256: d41d8cd98f00b204e9800998ecf8427e
 `;
 
@@ -57,7 +79,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
     } catch {
       // Fallback to local ./backups folder in workspace if system folder (/var/backups) is write-protected
       try {
-        const fallbackDir = path.join(process.cwd(), 'backups');
+        const fallbackDir = path.join(process.cwd(), 'backups', srvClean, dbClean);
         fs.mkdirSync(fallbackDir, { recursive: true });
         actualSavedLocation = path.join(fallbackDir, defaultFilename);
         fs.writeFileSync(actualSavedLocation, mockDumpHeader, 'utf-8');
@@ -73,7 +95,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
       : `${Math.round(fileSize / 1024)} KB`;
 
     const newEntry: BackupEntry = {
-      id: `bkp-manual-${Date.now().toString().slice(-6)}`,
+      id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
       type,
       status: 'completed',
       startTime: now.toISOString(),
@@ -84,9 +106,13 @@ SELECT pg_catalog.set_config('search_path', '', false);
       location: actualSavedLocation,
       checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
       verifiedIntegrity: true,
+      serverId: opts.serverId,
+      serverName: srvName,
+      serverHost: opts.serverHost,
+      databaseName: dbName,
       notes: savedOnDisk 
-        ? `Backup gerado e salvo com sucesso no servidor em: ${actualSavedLocation}`
-        : `Simulação de backup concluída para: ${actualSavedLocation}`
+        ? `Backup do banco "${dbName}" no servidor "${srvName}" salvo em: ${actualSavedLocation}`
+        : `Simulação de backup do banco "${dbName}" no servidor "${srvName}" em: ${actualSavedLocation}`
     };
 
     this.overview.recentBackups.unshift(newEntry);

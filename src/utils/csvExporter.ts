@@ -82,9 +82,9 @@ export function exportToCSV(
     sections.push(`"Tamanho Total Armazenado:","${backup.totalBackupSizeFormatted}"`);
     sections.push(`"Arquivamento WAL:","${backup.walArchiveStatus.toUpperCase()}"`);
     sections.push(`""`);
-    sections.push(`"ID Backup","Tipo","Status","Data de Início","Tamanho","Localização","Checksum"`);
+    sections.push(`"ID Backup","Servidor","Banco","Tipo","Status","Data de Início","Tamanho","Localização","Checksum"`);
     for (const bkp of backup.recentBackups) {
-      sections.push(`"${bkp.id}","${bkp.type}","${bkp.status}","${bkp.startTime}","${bkp.sizeFormatted}","${bkp.location}","${bkp.checksum}"`);
+      sections.push(`"${bkp.id}","${bkp.serverName || 'Servidor'}","${bkp.databaseName || 'postgres'}","${bkp.type}","${bkp.status}","${bkp.startTime}","${bkp.sizeFormatted}","${bkp.location}","${bkp.checksum}"`);
     }
     sections.push(`""`);
   }

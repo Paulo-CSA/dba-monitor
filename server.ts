@@ -262,9 +262,16 @@ async function startServer() {
 
   // Trigger manual backup with custom path
   app.post('/api/db/backups/trigger', (req, res) => {
-    const { type, location } = req.body;
+    const { type, location, serverId, serverName, serverHost, databaseName } = req.body;
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
-    const newEntry = backupMonitorSingleton.triggerManualBackup(backupType, location);
+    const newEntry = backupMonitorSingleton.triggerManualBackup({
+      type: backupType,
+      customPath: location,
+      serverId,
+      serverName,
+      serverHost,
+      databaseName
+    });
     res.json({ success: true, entry: newEntry });
   });
 

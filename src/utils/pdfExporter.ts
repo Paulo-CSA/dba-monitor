@@ -176,6 +176,8 @@ export function exportToPDF(
 
     const backupRows = backup.recentBackups.map(b => [
       b.id,
+      b.serverName || 'Servidor',
+      b.databaseName || 'postgres',
       b.type,
       b.status.toUpperCase(),
       b.sizeFormatted,
@@ -185,7 +187,7 @@ export function exportToPDF(
 
     autoTable(doc, {
       startY: currentY,
-      head: [['ID Backup', 'Tipo', 'Status', 'Tamanho', 'Caminho / Bucket', 'Integridade']],
+      head: [['ID Backup', 'Servidor', 'Banco', 'Tipo', 'Status', 'Tamanho', 'Caminho / Bucket', 'Integridade']],
       body: backupRows,
       theme: 'striped',
       headStyles: { fillColor: [124, 58, 237], fontSize: 9, fontStyle: 'bold' },

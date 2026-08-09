@@ -11,6 +11,10 @@ export interface BackupEntry {
   checksum: string;
   verifiedIntegrity: boolean;
   notes?: string;
+  serverId?: string;
+  serverName?: string;
+  serverHost?: string;
+  databaseName?: string;
 }
 
 export interface BackupOverview {

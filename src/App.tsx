@@ -312,11 +312,19 @@ export default function App() {
   // Handler for Manual Backup
   const handleTriggerBackup = async (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => {
     setIsTriggeringBackup(true);
+    const targetDbName = activeDb?.datname || selectedDatabaseName || 'postgres';
     try {
       const res = await fetch('/api/db/backups/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, location: customPath })
+        body: JSON.stringify({
+          type,
+          location: customPath,
+          serverId: activeServerObject?.id,
+          serverName: activeServerObject?.name || activeServerObject?.host,
+          serverHost: activeServerObject?.host,
+          databaseName: targetDbName
+        })
       });
 
       if (res.ok) {
