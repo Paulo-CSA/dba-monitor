@@ -143,26 +143,42 @@ SELECT pg_catalog.set_config('search_path', '', false);
 -- Checksum sha256: d41d8cd98f00b204e9800998ecf8427e
 `;
 
+    const dir = path.dirname(requestedLocation);
+    const localDir = dir.startsWith('/') ? path.join(process.cwd(), dir.slice(1)) : path.resolve(process.cwd(), dir);
+
+    // Explicitly create the directory structure (e.g. database/backups/postgresql/srv/db) in the workspace
     try {
-      const dir = path.dirname(requestedLocation);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(requestedLocation, mockDumpHeader, 'utf-8');
+      fs.mkdirSync(localDir, { recursive: true });
+    } catch (e) {
+      console.warn('Could not create workspace directory:', e);
+    }
+
+    // Attempt to create root level directory if system permissions allow
+    try {
+      if (dir !== localDir) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch {
+      // Ignored if root filesystem is read-only
+    }
+
+    // Write file to workspace local path first (guaranteed writable)
+    const localFilePath = path.join(localDir, filename);
+    try {
+      fs.writeFileSync(localFilePath, mockDumpHeader, 'utf-8');
       savedOnDisk = true;
-      fileSize = fs.statSync(requestedLocation).size;
+      fileSize = fs.statSync(localFilePath).size;
+      actualSavedLocation = localFilePath;
+    } catch (err) {
+      console.error('Failed to save local backup file:', err);
+    }
+
+    // Also write to absolute location if writable
+    try {
+      fs.writeFileSync(requestedLocation, mockDumpHeader, 'utf-8');
       actualSavedLocation = requestedLocation;
     } catch {
-      // Fallback to local ./backups folder in workspace if system folder (/database/backups) is write-protected
-      try {
-        const fallbackDir = path.join(process.cwd(), 'backups', srvClean, dbClean);
-        fs.mkdirSync(fallbackDir, { recursive: true });
-        const localFile = path.join(fallbackDir, filename);
-        fs.writeFileSync(localFile, mockDumpHeader, 'utf-8');
-        savedOnDisk = true;
-        fileSize = fs.statSync(localFile).size;
-        actualSavedLocation = requestedLocation;
-      } catch (err) {
-        console.error('Failed to save backup file to disk:', err);
-      }
+      // If absolute root path fails, actualSavedLocation remains localFilePath
     }
 
     const sizeFormatted = fileSize > 1024 * 1024 
