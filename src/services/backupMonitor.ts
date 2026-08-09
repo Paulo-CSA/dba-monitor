@@ -23,7 +23,7 @@ export function resolveBackupPath(
   const timestampStr = now.toISOString().replace(/[:.]/g, '-');
   const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
 
-  const standardRoot = '/database/backups/postgresql';
+  const standardRoot = '/backups/postgresql';
 
   if (!customPath || customPath.trim().length === 0) {
     return {
