@@ -88,8 +88,10 @@ export default function App() {
 
       if (serversRes.ok) {
         const sData = await serversRes.json();
-        if (sData.servers) {
+        if (sData.servers && sData.servers.length > 0) {
           setFleetServers(sData.servers);
+          setSelectedServerId((prev) => prev || sData.servers[0].id);
+          setSelectedDatabaseName((prev) => prev || (sData.servers[0].databases[0]?.datname || 'postgres'));
         }
       }
 
@@ -334,6 +336,13 @@ export default function App() {
     setIsTriggeringBackup(true);
     const srv = targetServerObj || activeServerObject;
     const targetDbName = targetDbNameParam || activeDb?.datname || selectedDatabaseName || srv?.databases[0]?.datname || 'postgres';
+
+    if (srv && srv.id) {
+      setSelectedServerId(srv.id);
+    }
+    if (targetDbName) {
+      setSelectedDatabaseName(targetDbName);
+    }
     try {
       const res = await fetch('/api/db/backups/trigger', {
         method: 'POST',

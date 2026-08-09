@@ -53,8 +53,16 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const filteredBackups = backupOverview.recentBackups.filter((b) => {
     if (filterMode === 'all') return true;
-    const matchSrv = !b.serverName || b.serverName === currentServerName || b.serverHost === server?.host;
-    const matchDb = !b.databaseName || b.databaseName === currentDbName;
+    const matchSrv =
+      (b.serverId && server?.id && b.serverId === server.id) ||
+      (b.serverName && b.serverName === currentServerName) ||
+      (b.serverHost && server?.host && b.serverHost === server.host) ||
+      (!b.serverId && !b.serverName && !b.serverHost);
+
+    const matchDb =
+      (b.databaseName && b.databaseName === currentDbName) ||
+      (!b.databaseName);
+
     return matchSrv && matchDb;
   });
 
@@ -287,13 +295,13 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                     <td className="py-3 px-4 font-mono text-slate-200">
                       <span className="flex items-center space-x-1">
                         <Server className="w-3 h-3 text-cyan-400 inline" />
-                        <span>{bkp.serverName || currentServerName}</span>
+                        <span>{bkp.serverName || bkp.serverId || 'Servidor Central'}</span>
                       </span>
                     </td>
                     <td className="py-3 px-4 font-mono font-bold text-emerald-400">
                       <span className="flex items-center space-x-1">
                         <Database className="w-3 h-3 text-emerald-400 inline" />
-                        <span>{bkp.databaseName || currentDbName}</span>
+                        <span>{bkp.databaseName || 'postgres'}</span>
                       </span>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-300">

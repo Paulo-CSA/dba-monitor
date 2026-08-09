@@ -103,15 +103,17 @@ SELECT pg_catalog.set_config('search_path', '', false);
       fs.writeFileSync(requestedLocation, mockDumpHeader, 'utf-8');
       savedOnDisk = true;
       fileSize = fs.statSync(requestedLocation).size;
+      actualSavedLocation = requestedLocation;
     } catch {
-      // Fallback to local ./backups folder in workspace if system folder (/var/backups) is write-protected
+      // Fallback to local ./backups folder in workspace if system folder (/database/backups) is write-protected
       try {
         const fallbackDir = path.join(process.cwd(), 'backups', srvClean, dbClean);
         fs.mkdirSync(fallbackDir, { recursive: true });
-        actualSavedLocation = path.join(fallbackDir, defaultFilename);
-        fs.writeFileSync(actualSavedLocation, mockDumpHeader, 'utf-8');
+        const localFile = path.join(fallbackDir, filename);
+        fs.writeFileSync(localFile, mockDumpHeader, 'utf-8');
         savedOnDisk = true;
-        fileSize = fs.statSync(actualSavedLocation).size;
+        fileSize = fs.statSync(localFile).size;
+        actualSavedLocation = requestedLocation;
       } catch (err) {
         console.error('Failed to save backup file to disk:', err);
       }
@@ -120,6 +122,8 @@ SELECT pg_catalog.set_config('search_path', '', false);
     const sizeFormatted = fileSize > 1024 * 1024 
       ? `${(fileSize / (1024 * 1024)).toFixed(2)} MB`
       : `${Math.round(fileSize / 1024)} KB`;
+
+    const srvId = opts.serverId || `srv-${srvClean}`;
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
@@ -133,9 +137,9 @@ SELECT pg_catalog.set_config('search_path', '', false);
       location: actualSavedLocation,
       checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
       verifiedIntegrity: true,
-      serverId: opts.serverId,
+      serverId: srvId,
       serverName: srvName,
-      serverHost: opts.serverHost,
+      serverHost: opts.serverHost || srvName,
       databaseName: dbName,
       notes: savedOnDisk 
         ? `Backup do banco "${dbName}" no servidor "${srvName}" salvo em: ${actualSavedLocation}`
