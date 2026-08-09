@@ -203,7 +203,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                       <td className="py-3 px-4 font-bold text-emerald-400">{db.sizeFormatted}</td>
 
                       <td className="py-3 px-4 text-slate-200">
-                        <span className="font-bold text-white">{db.activeConnections}</span> / {db.maxConnections}
+                        <span className="font-bold text-cyan-400">{db.activeConnections || 0}</span>
                       </td>
 
                       <td className="py-3 px-4 text-purple-300 font-bold">{db.tps} tps</td>

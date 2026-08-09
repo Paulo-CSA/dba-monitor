@@ -78,7 +78,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         datname: dbName,
         sizeBytes: bytes,
         sizeFormatted: formattedSize,
-        activeConnections: 1,
+        activeConnections: 0,
         maxConnections: 100,
         tps: 0,
         cacheHitRatio: 100,
@@ -88,7 +88,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       });
     }
 
-    // 3. Fetch active queries / sessions from pg_stat_activity (filtering by datname = 'NOME_DO_BANCO')
+    // 3. Fetch active queries / sessions from pg_stat_activity across all databases
     const activityQuery = `
       SELECT 
         pid,
@@ -104,9 +104,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       FROM pg_stat_activity
       WHERE pid != pg_backend_pid()
         AND query NOT LIKE '%pg_stat_activity%'
-        ${params.database ? `AND datname = '${params.database.replace(/'/g, "''")}'` : ''}
       ORDER BY duration_seconds DESC
-      LIMIT 50;
+      LIMIT 100;
     `;
     let stuckQueries: StuckQuery[] = [];
     try {
@@ -126,6 +125,11 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
         query_start: new Date().toISOString()
       }));
+
+      // Update activeConnections per database dynamically
+      for (const db of databases) {
+        db.activeConnections = stuckQueries.filter((q) => q.datname === db.datname).length;
+      }
     } catch {
       // Non-fatal if user permissions restricted on pg_stat_activity
     }
@@ -273,7 +277,6 @@ export async function fetchLiveConnectionsForDb(params: {
 
   try {
     await client.connect();
-    const dbFilter = params.database ? params.database.replace(/'/g, "''") : '';
     const activityQuery = `
       SELECT 
         pid,
@@ -289,7 +292,6 @@ export async function fetchLiveConnectionsForDb(params: {
       FROM pg_stat_activity
       WHERE pid != pg_backend_pid()
         AND query NOT LIKE '%pg_stat_activity%'
-        ${dbFilter ? `AND datname = '${dbFilter}'` : ''}
       ORDER BY duration_seconds DESC
       LIMIT 100;
     `;

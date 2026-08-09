@@ -58,8 +58,14 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
   const warningCount = servers.filter((s) => s.status === 'warning').length;
   const criticalCount = servers.filter((s) => s.status === 'critical').length;
 
-  const totalDatabases = servers.reduce((acc, s) => acc + s.totalDatabasesCount, 0);
-  const totalActiveConnections = servers.reduce((acc, s) => acc + s.totalActiveConnections, 0);
+  const totalDatabases = servers.reduce((acc, s) => acc + (s.totalDatabasesCount || s.databases?.length || 0), 0);
+  const totalActiveConnections = servers.reduce((acc, s) => {
+    if (s.stuckQueries && Array.isArray(s.stuckQueries) && s.stuckQueries.length > 0) {
+      return acc + s.stuckQueries.length;
+    }
+    const dbConns = s.databases ? s.databases.reduce((dAcc, d) => dAcc + (d.activeConnections || 0), 0) : 0;
+    return acc + Math.max(dbConns, s.totalActiveConnections || 0);
+  }, 0);
 
   // Compute average CPU across servers
   const avgCpuUsage = Math.round(

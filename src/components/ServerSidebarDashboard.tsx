@@ -459,8 +459,8 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
 
                           <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
                             <span className="text-[10px] text-slate-500 block">Conexões Ativas</span>
-                            <span className="font-bold text-white">
-                              {db.activeConnections} / {db.maxConnections}
+                            <span className="font-bold text-cyan-400">
+                              {db.activeConnections || 0}
                             </span>
                           </div>
 
@@ -540,14 +540,10 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
 
                   <MetricCard
                     title="Conexões no Banco"
-                    value={activeDatabase?.activeConnections || metrics.currentResources.activeConnections}
-                    unit={`/ ${activeDatabase?.maxConnections || metrics.currentResources.maxConnections}`}
-                    subtitle="Pool pg_stat_database"
+                    value={activeDatabase?.activeConnections ?? 0}
+                    subtitle={`Banco: ${activeDatabase?.datname || 'PostgreSQL'}`}
                     icon={Users}
                     status="normal"
-                    progressPercent={Math.round(
-                      ((activeDatabase?.activeConnections || 50) / (activeDatabase?.maxConnections || 150)) * 100
-                    )}
                     details={[
                       { label: 'Transações/s', value: `${activeDatabase?.tps || metrics.currentResources.tps}` },
                       { label: 'Cache Hit', value: `${activeDatabase?.cacheHitRatio || 99}%` }

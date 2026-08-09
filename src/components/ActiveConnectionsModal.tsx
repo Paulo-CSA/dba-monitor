@@ -158,19 +158,20 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
         {/* Telemetry Bar */}
         <div className="p-4 bg-slate-950/80 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-            <span className="text-slate-400 block text-[11px] mb-0.5">Conexões Ativas / Limite</span>
+            <span className="text-slate-400 block text-[11px] mb-0.5">Conexões Ativas no Banco</span>
             <div className="flex items-baseline space-x-1 font-mono font-bold text-white text-base">
-              <span className="text-cyan-400">{activeConnectionsCount || effectiveConnections.length}</span>
-              <span className="text-slate-500 text-xs">/ {maxConnectionsCount}</span>
+              <span className="text-cyan-400">{effectiveConnections.length}</span>
+              <span className="text-slate-500 text-xs">sessão(ões)</span>
             </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-            <span className="text-slate-400 block text-[11px] mb-0.5">Ocupação de Capacidade</span>
+            <span className="text-slate-400 block text-[11px] mb-0.5">Sessões em Execução</span>
             <div className="flex items-baseline space-x-1 font-mono font-bold text-base">
-              <span className={capacityPercent > 80 ? 'text-rose-400' : 'text-emerald-400'}>
-                {capacityPercent}%
+              <span className="text-emerald-400">
+                {effectiveConnections.filter(c => c.state === 'active').length}
               </span>
+              <span className="text-slate-500 text-xs">ativa(s)</span>
             </div>
           </div>
 

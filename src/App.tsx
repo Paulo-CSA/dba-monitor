@@ -157,11 +157,19 @@ export default function App() {
         if (data.success && Array.isArray(data.queries)) {
           setStuckQueries(data.queries);
           setFleetServers((prev) =>
-            prev.map((srv) =>
-              srv.id === activeServerObject.id
-                ? { ...srv, stuckQueries: data.queries }
-                : srv
-            )
+            prev.map((srv) => {
+              if (srv.id !== activeServerObject.id) return srv;
+              const updatedDatabases = srv.databases.map((db) => ({
+                ...db,
+                activeConnections: data.queries.filter((q: StuckQuery) => q.datname === db.datname).length
+              }));
+              return {
+                ...srv,
+                stuckQueries: data.queries,
+                databases: updatedDatabases,
+                totalActiveConnections: data.queries.length
+              };
+            })
           );
         } else {
           // If not live PG TCP or in simulation mode, fetch default simulation state
@@ -726,15 +734,13 @@ export default function App() {
 
                 <MetricCard
                   title="Conexões Ativas"
-                  value={activeServerMetrics.currentResources.activeConnections}
-                  unit={`/ ${activeServerMetrics.currentResources.maxConnections}`}
-                  subtitle={`Banco: ${activeDb?.datname || 'pg_stat'}`}
+                  value={activeServerStuckQueries.length}
+                  subtitle={`Banco: ${currentDbName}`}
                   icon={Users}
-                  status={activeServerMetrics.currentResources.activeConnections > 150 ? 'warning' : 'normal'}
-                  progressPercent={Math.round((activeServerMetrics.currentResources.activeConnections / activeServerMetrics.currentResources.maxConnections) * 100)}
+                  status={activeServerStuckQueries.length > 150 ? 'warning' : 'normal'}
                   details={[
-                    { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` },
-                    { label: 'Limit Max', value: `${activeServerMetrics.currentResources.maxConnections}` }
+                    { label: 'Sessões Ativas', value: `${activeServerStuckQueries.length}` },
+                    { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` }
                   ]}
                   onClick={() => setShowConnectionsModal(true)}
                   clickableHint="Clique para ver conexões ativas"

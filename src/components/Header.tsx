@@ -38,8 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Database className="w-6 h-6 text-white" />
+             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-md shadow-blue-500/20">
+              <Database className="w-6 h-6 text-white" />            
             </div>
             <div>
               <div className="flex items-center space-x-2">
@@ -52,7 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-mono flex items-center space-x-1">
-                <span>{selectedServerHost}</span>
+                {/* {selectedServerHost} */}
+                <span>Analisando</span>
                 <span className="text-slate-600">/</span>
                 <span className="text-cyan-300 font-bold">{selectedDatabaseName}</span>
               </p>
