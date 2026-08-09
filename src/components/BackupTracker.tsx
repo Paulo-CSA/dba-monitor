@@ -45,7 +45,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   // Local vs Remote server options
   const [targetLocationType, setTargetLocationType] = useState<'local' | 'remote'>('local');
-  const [sshUser, setSshUser] = useState<string>('postgres');
+  const [sshUser, setSshUser] = useState<string>('debian');
   const [sshPassword, setSshPassword] = useState<string>('');
   const [sshHost, setSshHost] = useState<string>(server?.host || '');
   const [sshPort, setSshPort] = useState<string>('22');
@@ -227,7 +227,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                   className="accent-cyan-500 cursor-pointer"
                 />
                 <span className={targetLocationType === 'local' ? 'text-cyan-300 font-bold' : 'text-slate-400'}>
-                  Local (Servidor XPTO)
+                  Local - Aplicação 
                 </span>
               </label>
 
