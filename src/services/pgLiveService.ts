@@ -94,8 +94,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         pid,
         usename,
         datname,
-        COALESCE(client_addr::text, '192.168.73.1') as client_addr,
-        COALESCE(application_name, 'DBeaver 26.1.4') as application_name,
+        COALESCE(client_addr::text, '127.0.0.1') as client_addr,
+        COALESCE(application_name, 'PostgreSQL Client') as application_name,
         state,
         query,
         ROUND(COALESCE(EXTRACT(epoch FROM (now() - query_start)), 0)::numeric, 1) as duration_seconds,
@@ -103,6 +103,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         wait_event
       FROM pg_stat_activity
       WHERE pid != pg_backend_pid()
+        AND datname IS NOT NULL
+        AND datname != ''
         AND query NOT LIKE '%pg_stat_activity%'
       ORDER BY duration_seconds DESC
       LIMIT 100;
@@ -110,21 +112,23 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
     let stuckQueries: StuckQuery[] = [];
     try {
       const actRes = await client.query(activityQuery);
-      stuckQueries = actRes.rows.map((r) => ({
-        pid: r.pid,
-        usename: r.usename || params.dbUser,
-        datname: r.datname || params.database,
-        client_addr: r.client_addr,
-        application_name: r.application_name,
-        state: r.state || 'active',
-        query: r.query,
-        durationSeconds: parseFloat(r.duration_seconds) || 0,
-        wait_event_type: r.wait_event_type || null,
-        wait_event: r.wait_event || null,
-        blocking_pid: null,
-        isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
-        query_start: new Date().toISOString()
-      }));
+      stuckQueries = actRes.rows
+        .filter((r) => r.datname && r.datname.trim() !== '')
+        .map((r) => ({
+          pid: Number(r.pid),
+          usename: r.usename || params.dbUser || 'postgres',
+          datname: r.datname,
+          client_addr: r.client_addr,
+          application_name: r.application_name,
+          state: r.state || 'active',
+          query: r.query || 'SELECT 1;',
+          durationSeconds: parseFloat(r.duration_seconds) || 0,
+          wait_event_type: r.wait_event_type || null,
+          wait_event: r.wait_event || null,
+          blocking_pid: null,
+          isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
+          query_start: new Date().toISOString()
+        }));
 
       // Update activeConnections per database dynamically
       for (const db of databases) {
@@ -277,13 +281,14 @@ export async function fetchLiveConnectionsForDb(params: {
 
   try {
     await client.connect();
+    const dbFilter = params.database ? params.database.replace(/'/g, "''") : '';
     const activityQuery = `
       SELECT 
         pid,
         usename,
         datname,
         COALESCE(client_addr::text, '${params.host}') as client_addr,
-        COALESCE(application_name, 'DBeaver / PostgreSQL Client') as application_name,
+        COALESCE(application_name, 'PostgreSQL Client') as application_name,
         state,
         query,
         ROUND(COALESCE(EXTRACT(epoch FROM (now() - query_start)), 0)::numeric, 1) as duration_seconds,
@@ -291,6 +296,9 @@ export async function fetchLiveConnectionsForDb(params: {
         wait_event
       FROM pg_stat_activity
       WHERE pid != pg_backend_pid()
+        AND datname IS NOT NULL
+        AND datname != ''
+        ${dbFilter ? `AND datname = '${dbFilter}'` : ''}
         AND query NOT LIKE '%pg_stat_activity%'
       ORDER BY duration_seconds DESC
       LIMIT 100;
@@ -299,21 +307,23 @@ export async function fetchLiveConnectionsForDb(params: {
     const res = await client.query(activityQuery);
     await client.end();
 
-    const queries: StuckQuery[] = res.rows.map((r) => ({
-      pid: Number(r.pid),
-      usename: r.usename || params.dbUser || 'postgres',
-      datname: r.datname || params.database || 'postgres',
-      client_addr: r.client_addr,
-      application_name: r.application_name,
-      state: r.state || 'active',
-      query: r.query || 'SELECT 1;',
-      durationSeconds: parseFloat(r.duration_seconds) || 0,
-      wait_event_type: r.wait_event_type || null,
-      wait_event: r.wait_event || null,
-      blocking_pid: null,
-      isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
-      query_start: new Date().toISOString()
-    }));
+    const queries: StuckQuery[] = res.rows
+      .filter((r) => r.datname && r.datname.trim() !== '')
+      .map((r) => ({
+        pid: Number(r.pid),
+        usename: r.usename || params.dbUser || 'postgres',
+        datname: r.datname,
+        client_addr: r.client_addr,
+        application_name: r.application_name,
+        state: r.state || 'active',
+        query: r.query || 'SELECT 1;',
+        durationSeconds: parseFloat(r.duration_seconds) || 0,
+        wait_event_type: r.wait_event_type || null,
+        wait_event: r.wait_event || null,
+        blocking_pid: null,
+        isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
+        query_start: new Date().toISOString()
+      }));
 
     return {
       success: true,
