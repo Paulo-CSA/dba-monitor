@@ -197,40 +197,17 @@ SELECT pg_catalog.set_config('search_path', '', false);
     const sshHost = opts.sshHost || srvHost;
     const sshPort = opts.sshPort || 22;
 
-    // 3. Format command string respecting user's exact specification
+    // 3. Format command string for local backup execution
     let command = '';
-    let notes = '';
-
-    if (targetLocationType === 'remote') {
-      const sshTarget = `${sshUser}@${sshHost}`;
-      const sshPortNum = Number(sshPort);
-      const portSshFlag = sshPortNum && sshPortNum !== 22 ? `-p ${sshPortNum} ` : '';
-      const portScpFlag = sshPortNum && sshPortNum !== 22 ? `-P ${sshPortNum} ` : '';
-
-      const passPrefix = opts.sshPassword 
-        ? `sshpass -p '${opts.sshPassword.replace(/'/g, "'\\''")}' `
-        : '';
-
-      const localDumpCmd = type === 'pg_dump'
-        ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
-        : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
-
-      const sshMkdirCmd = `${passPrefix}ssh ${portSshFlag}${sshTarget} "mkdir -p ${targetDir}"`;
-      const scpTransferCmd = `${passPrefix}scp ${portScpFlag}${requestedLocation} ${sshTarget}:${targetDir}/`;
-      const rmLocalCmd = `rm -f ${requestedLocation}`;
-
-      command = `${localDumpCmd} && \\\n${sshMkdirCmd} && \\\n${scpTransferCmd} && \\\n${rmLocalCmd}`;
-      notes = `Backup gerado em ${requestedLocation}, enviado via SCP (${passPrefix ? 'com sshpass' : 'com senha'}) para ${sshTarget}:${targetDir}/ e removido do servidor local.`;
+    if (type === 'pg_dump') {
+      command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
     } else {
-      if (type === 'pg_dump') {
-        command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
-      } else {
-        command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
-      }
-      notes = savedOnDisk 
-        ? `Backup local do banco "${dbName}" (${srvName}) salvo em: ${requestedLocation}`
-        : `Simulação de backup local do banco "${dbName}" (${srvName}) em: ${requestedLocation}`;
+      command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
     }
+
+    const notes = savedOnDisk 
+      ? `Backup local do banco "${dbName}" (${srvName}) salvo em: ${requestedLocation}`
+      : `Backup do banco "${dbName}" (${srvName}) salvo em: ${requestedLocation}`;
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
