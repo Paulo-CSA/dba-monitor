@@ -12,6 +12,87 @@ export interface TriggerBackupOptions {
   databaseName?: string;
 }
 
+export function resolveBackupPath(
+  srvClean: string,
+  dbClean: string,
+  type: 'pg_dump' | 'pg_basebackup',
+  customPath?: string
+): { baseDir: string; filename: string } {
+  const ext = type === 'pg_dump' ? 'sql' : 'tar.gz';
+  const now = new Date();
+  const timestampStr = now.toISOString().replace(/[:.]/g, '-');
+  const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
+
+  const standardRoot = '/database/backups/postgresql';
+
+  if (!customPath || customPath.trim().length === 0) {
+    return {
+      baseDir: `${standardRoot}/${srvClean}/${dbClean}`,
+      filename: defaultFilename
+    };
+  }
+
+  let raw = customPath.trim().replace(/\\/g, '/');
+  let filename = defaultFilename;
+
+  // Extract explicit filename if user provided one with extension
+  if (raw.match(/\.(sql|tar|gz|bak|dump)$/i)) {
+    filename = path.basename(raw);
+    raw = path.dirname(raw);
+  }
+
+  // Strip trailing slashes
+  raw = raw.replace(/\/+$/, '');
+
+  if (!raw || raw === '.' || raw === '/') {
+    return {
+      baseDir: `${standardRoot}/${srvClean}/${dbClean}`,
+      filename
+    };
+  }
+
+  const segments = raw.split('/').filter(Boolean);
+
+  // Check if raw already ends with srvClean/dbClean
+  if (segments.length >= 2) {
+    const last2 = segments[segments.length - 2];
+    const last1 = segments[segments.length - 1];
+    if (last2.toLowerCase() === srvClean.toLowerCase() && last1.toLowerCase() === dbClean.toLowerCase()) {
+      return { baseDir: '/' + segments.join('/'), filename };
+    }
+  }
+
+  // Find root directory: check if 'postgresql' or 'backups' is in segments
+  let rootIndex = -1;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (['postgresql', 'backups'].includes(segments[i].toLowerCase())) {
+      rootIndex = i;
+      break;
+    }
+  }
+  if (rootIndex !== -1) {
+    const rootPath = '/' + segments.slice(0, rootIndex + 1).join('/');
+    return {
+      baseDir: `${rootPath}/${srvClean}/${dbClean}`,
+      filename
+    };
+  }
+
+  // If custom path was provided like /mnt/storage/xpto/postgres
+  if (segments.length >= 3) {
+    const rootPath = '/' + segments.slice(0, segments.length - 2).join('/');
+    return {
+      baseDir: `${rootPath}/${srvClean}/${dbClean}`,
+      filename
+    };
+  }
+
+  return {
+    baseDir: `/${segments.join('/')}/${srvClean}/${dbClean}`,
+    filename
+  };
+}
+
 export class BackupMonitor {
   private overview: BackupOverview;
 
@@ -35,43 +116,8 @@ export class BackupMonitor {
     const srvClean = srvName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const dbClean = dbName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    const ext = type === 'pg_dump' ? 'sql' : 'tar.gz';
     const now = new Date();
-    const timestampStr = now.toISOString().replace(/[:.]/g, '-');
-    const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
-
-    const standardRoot = '/database/backups/postgresql';
-    let baseDir = `${standardRoot}/${srvClean}/${dbClean}`;
-    let filename = defaultFilename;
-
-    if (opts.customPath && opts.customPath.trim().length > 0) {
-      let raw = opts.customPath.trim();
-      
-      // If user passed a file path with extension
-      if (raw.match(/\.(sql|tar|gz|bak|dump)$/i)) {
-        filename = path.basename(raw);
-        raw = path.dirname(raw);
-      }
-
-      // Remove trailing slashes
-      raw = raw.replace(/[/\\]+$/, '');
-
-      // Check if raw already ends with /srvClean/dbClean
-      if (raw.endsWith(`${srvClean}/${dbClean}`) || raw.endsWith(`${srvClean}\\${dbClean}`)) {
-        baseDir = raw;
-      } else if (raw.endsWith(srvClean)) {
-        baseDir = `${raw}/${dbClean}`;
-      } else {
-        // Strip out any trailing server or database folders from other servers (e.g., .../xpto/mandu or .../xpto)
-        // Extract root directory up to /postgresql or /backups or base user directory
-        const rootMatch = raw.match(/^(.*?\/(?:backups\/postgresql|backups|postgresql))/i);
-        if (rootMatch) {
-          baseDir = `${rootMatch[1]}/${srvClean}/${dbClean}`;
-        } else {
-          baseDir = `${raw}/${srvClean}/${dbClean}`;
-        }
-      }
-    }
+    const { baseDir, filename } = resolveBackupPath(srvClean, dbClean, type, opts.customPath);
 
     const requestedLocation = path.join(baseDir, filename);
 

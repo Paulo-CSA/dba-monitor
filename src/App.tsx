@@ -133,14 +133,16 @@ export default function App() {
   const handleSelectServer = (serverId: string, preferredDbName?: string) => {
     setSelectedServerId(serverId);
     const targetServer = fleetServers.find((s) => s.id === serverId);
-    if (targetServer && targetServer.databases.length > 0) {
+    if (targetServer) {
       if (preferredDbName) {
         setSelectedDatabaseName(preferredDbName);
-      } else {
+      } else if (targetServer.databases && targetServer.databases.length > 0) {
         const dbExists = targetServer.databases.some((d) => d.datname === selectedDatabaseName);
         if (!dbExists) {
           setSelectedDatabaseName(targetServer.databases[0].datname);
         }
+      } else {
+        setSelectedDatabaseName('postgres');
       }
     }
   };
