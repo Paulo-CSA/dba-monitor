@@ -10,6 +10,7 @@ export interface TriggerBackupOptions {
   serverName?: string;
   serverHost?: string;
   databaseName?: string;
+  targetPgVersion?: string;
 }
 
 export function resolveBackupPath(
@@ -187,11 +188,23 @@ SELECT pg_catalog.set_config('search_path', '', false);
       : `${Math.round(fileSize / 1024)} KB`;
 
     const srvId = opts.serverId || `srv-${srvClean}`;
+    const rawVersion = opts.targetPgVersion || '16';
+    const pgMajorVer = rawVersion.match(/\d+/)?.[0] || '16';
 
-    // 3. Format command string respecting user's exact specification
-    const command = type === 'pg_dump'
+    // 3. Format command string respecting version compatibility and multi-execution modes
+    const commandNative = type === 'pg_dump'
       ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
-      : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
+      : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${targetDir}" -F t -z`;
+
+    const commandDocker = type === 'pg_dump'
+      ? `docker run --rm -v "${targetDir}:${targetDir}" postgres:${pgMajorVer} pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
+      : `docker run --rm -v "${targetDir}:${targetDir}" postgres:${pgMajorVer} pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${targetDir}" -F t -z`;
+
+    const commandSsh = type === 'pg_dump'
+      ? `ssh postgres@${srvHost} "pg_dump -p 5432 -U postgres -d ${dbName} -F c -f \"${requestedLocation}\""`
+      : `ssh postgres@${srvHost} "pg_basebackup -p 5432 -U postgres -D \"${targetDir}\" -F t -z"`;
+
+    const commandPgDump = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation.replace(/\.(tar\.gz|sql)$/, '.dump')}"`;
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
@@ -203,7 +216,11 @@ SELECT pg_catalog.set_config('search_path', '', false);
       sizeBytes: fileSize,
       sizeFormatted,
       location: requestedLocation,
-      command,
+      command: commandNative,
+      commandDocker,
+      commandSsh,
+      commandPgDump,
+      targetPgVersion: `PostgreSQL ${pgMajorVer}`,
       checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
       verifiedIntegrity: true,
       serverId: srvId,

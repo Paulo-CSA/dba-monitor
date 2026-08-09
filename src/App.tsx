@@ -355,7 +355,8 @@ export default function App() {
           serverId: srv?.id,
           serverName: srv?.name || srv?.host,
           serverHost: srv?.host,
-          databaseName: targetDbName
+          databaseName: targetDbName,
+          targetPgVersion: srv?.pgVersion
         })
       });
 

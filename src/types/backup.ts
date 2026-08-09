@@ -9,6 +9,10 @@ export interface BackupEntry {
   sizeFormatted: string;
   location: string;
   command?: string;
+  commandDocker?: string;
+  commandSsh?: string;
+  commandPgDump?: string;
+  targetPgVersion?: string;
   checksum: string;
   verifiedIntegrity: boolean;
   notes?: string;
