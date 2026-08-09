@@ -10,6 +10,11 @@ export interface TriggerBackupOptions {
   serverName?: string;
   serverHost?: string;
   databaseName?: string;
+  targetLocationType?: 'local' | 'remote';
+  sshUser?: string;
+  sshPassword?: string;
+  sshHost?: string;
+  sshPort?: number;
 }
 
 export function resolveBackupPath(
@@ -187,11 +192,32 @@ SELECT pg_catalog.set_config('search_path', '', false);
       : `${Math.round(fileSize / 1024)} KB`;
 
     const srvId = opts.serverId || `srv-${srvClean}`;
+    const targetLocationType = opts.targetLocationType || 'local';
+    const sshUser = opts.sshUser || 'postgres';
+    const sshHost = opts.sshHost || srvHost;
+    const sshPort = opts.sshPort || 22;
 
     // 3. Format command string respecting user's exact specification
-    const command = type === 'pg_dump'
-      ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
-      : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
+    let command = '';
+    let notes = '';
+
+    if (targetLocationType === 'remote') {
+      if (type === 'pg_dump') {
+        command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c | ssh -p ${sshPort} ${sshUser}@${sshHost} "cat > '${requestedLocation}'"`;
+      } else {
+        command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}" | ssh -p ${sshPort} ${sshUser}@${sshHost} "cat > '${requestedLocation}'"`;
+      }
+      notes = `Backup remoto via SSH (${sshUser}@${sshHost}:${sshPort}) enviado para o destino: ${requestedLocation}`;
+    } else {
+      if (type === 'pg_dump') {
+        command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
+      } else {
+        command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
+      }
+      notes = savedOnDisk 
+        ? `Backup local do banco "${dbName}" (${srvName}) salvo em: ${requestedLocation}`
+        : `Simulação de backup local do banco "${dbName}" (${srvName}) em: ${requestedLocation}`;
+    }
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
@@ -210,9 +236,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
       serverName: srvName,
       serverHost: srvHost,
       databaseName: dbName,
-      notes: savedOnDisk 
-        ? `Backup do banco "${dbName}" no servidor "${srvName}" (${srvHost}) salvo em: ${requestedLocation}`
-        : `Simulação de backup do banco "${dbName}" no servidor "${srvName}" (${srvHost}) em: ${requestedLocation}`
+      notes
     };
 
     this.overview.recentBackups.unshift(newEntry);

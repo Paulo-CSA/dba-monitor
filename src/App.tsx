@@ -333,7 +333,12 @@ export default function App() {
     type: 'pg_dump' | 'pg_basebackup',
     customPath?: string,
     targetServerObj?: ServerInstance,
-    targetDbNameParam?: string
+    targetDbNameParam?: string,
+    targetLocationType: 'local' | 'remote' = 'local',
+    sshUser?: string,
+    sshPassword?: string,
+    sshHost?: string,
+    sshPort?: number
   ) => {
     setIsTriggeringBackup(true);
     const srv = targetServerObj || activeServerObject;
@@ -355,7 +360,12 @@ export default function App() {
           serverId: srv?.id,
           serverName: srv?.name || srv?.host,
           serverHost: srv?.host,
-          databaseName: targetDbName
+          databaseName: targetDbName,
+          targetLocationType,
+          sshUser,
+          sshPassword,
+          sshHost: sshHost || srv?.host,
+          sshPort
         })
       });
 

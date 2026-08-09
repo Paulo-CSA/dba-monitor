@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Plus, Play, Server, Database, Trash2, Filter } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Plus, Play, Server, Database, Trash2, Filter, Key, User, Globe, Lock, Terminal } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -10,7 +10,12 @@ interface BackupTrackerProps {
     type: 'pg_dump' | 'pg_basebackup',
     customPath?: string,
     targetServerObj?: ServerInstance,
-    targetDbNameParam?: string
+    targetDbNameParam?: string,
+    targetLocationType?: 'local' | 'remote',
+    sshUser?: string,
+    sshPassword?: string,
+    sshHost?: string,
+    sshPort?: number
   ) => void;
   onDeleteBackup?: (id: string) => void;
   onClearAllBackups?: () => void;
@@ -38,6 +43,13 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [customPath, setCustomPath] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'selected'>('all');
 
+  // Local vs Remote server options
+  const [targetLocationType, setTargetLocationType] = useState<'local' | 'remote'>('local');
+  const [sshUser, setSshUser] = useState<string>('postgres');
+  const [sshPassword, setSshPassword] = useState<string>('');
+  const [sshHost, setSshHost] = useState<string>(server?.host || '');
+  const [sshPort, setSshPort] = useState<string>('22');
+
   const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
   const currentDbName = databaseName || 'postgres';
 
@@ -47,6 +59,9 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   useEffect(() => {
     setCustomPath(`/backups/postgresql/${srvFolder}/${dbFolder}/`);
+    if (server?.host) {
+      setSshHost(server.host);
+    }
   }, [server?.id, server?.name, server?.host, databaseName, srvFolder, dbFolder]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
@@ -194,6 +209,106 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
           </div>
         </div>
 
+        {/* Destination Location Type Selection */}
+        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Modo de Destino do Arquivo</span>
+            </label>
+            <div className="flex items-center space-x-4 text-xs">
+              <label className="flex items-center space-x-2 cursor-pointer bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 hover:border-slate-700 transition-all">
+                <input
+                  type="radio"
+                  name="targetLocationType"
+                  value="local"
+                  checked={targetLocationType === 'local'}
+                  onChange={() => setTargetLocationType('local')}
+                  className="accent-cyan-500 cursor-pointer"
+                />
+                <span className={targetLocationType === 'local' ? 'text-cyan-300 font-bold' : 'text-slate-400'}>
+                  Local (Servidor XPTO)
+                </span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 hover:border-slate-700 transition-all">
+                <input
+                  type="radio"
+                  name="targetLocationType"
+                  value="remote"
+                  checked={targetLocationType === 'remote'}
+                  onChange={() => setTargetLocationType('remote')}
+                  className="accent-cyan-500 cursor-pointer"
+                />
+                <span className={targetLocationType === 'remote' ? 'text-cyan-300 font-bold' : 'text-slate-400'}>
+                  Servidor Remoto (Transferência SSH)
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* SSH Configuration Fields (Enabled when targetLocationType === 'remote') */}
+          {targetLocationType === 'remote' && (
+            <div className="pt-2.5 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end animate-fadeIn">
+              <div className="md:col-span-4">
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Globe className="w-3 h-3 text-cyan-400" />
+                  <span>Host / IP Remoto (SSH)</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshHost}
+                  onChange={(e) => setSshHost(e.target.value)}
+                  placeholder={server?.host || '192.168.1.10'}
+                  className="w-full bg-slate-900 border border-slate-700 text-xs text-cyan-300 font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <User className="w-3 h-3 text-cyan-400" />
+                  <span>Usuário SSH</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshUser}
+                  onChange={(e) => setSshUser(e.target.value)}
+                  placeholder="postgres"
+                  className="w-full bg-slate-900 border border-slate-700 text-xs text-white font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Lock className="w-3 h-3 text-cyan-400" />
+                  <span>Senha SSH</span>
+                </label>
+                <input
+                  type="password"
+                  value={sshPassword}
+                  onChange={(e) => setSshPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-900 border border-slate-700 text-xs text-white font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Terminal className="w-3 h-3 text-cyan-400" />
+                  <span>Porta SSH</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshPort}
+                  onChange={(e) => setSshPort(e.target.value)}
+                  placeholder="22"
+                  className="w-full bg-slate-900 border border-slate-700 text-xs text-white font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-6">
             <label className="block text-[11px] font-semibold text-slate-400 mb-1">
@@ -224,7 +339,17 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
           <div className="md:col-span-2">
             <button
-              onClick={() => onTriggerBackup(selectedType, customPath, server, currentDbName)}
+              onClick={() => onTriggerBackup(
+                selectedType,
+                customPath,
+                server,
+                currentDbName,
+                targetLocationType,
+                sshUser,
+                sshPassword,
+                sshHost || server?.host,
+                Number(sshPort) || 22
+              )}
               disabled={isTriggering}
               className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer whitespace-nowrap"
             >
