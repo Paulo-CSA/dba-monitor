@@ -128,6 +128,21 @@ export default function App() {
     fetchInitialStaticData();
   }, [fetchInitialStaticData]);
 
+  const handleSelectServer = (serverId: string, preferredDbName?: string) => {
+    setSelectedServerId(serverId);
+    const targetServer = fleetServers.find((s) => s.id === serverId);
+    if (targetServer && targetServer.databases.length > 0) {
+      if (preferredDbName) {
+        setSelectedDatabaseName(preferredDbName);
+      } else {
+        const dbExists = targetServer.databases.some((d) => d.datname === selectedDatabaseName);
+        if (!dbExists) {
+          setSelectedDatabaseName(targetServer.databases[0].datname);
+        }
+      }
+    }
+  };
+
   const activeServerObject = fleetServers.find((s) => s.id === selectedServerId) || fleetServers[0];
   const activeDb = activeServerObject
     ? activeServerObject.databases.find((d) => d.datname === selectedDatabaseName) || activeServerObject.databases[0]
@@ -310,9 +325,15 @@ export default function App() {
   };
 
   // Handler for Manual Backup
-  const handleTriggerBackup = async (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => {
+  const handleTriggerBackup = async (
+    type: 'pg_dump' | 'pg_basebackup',
+    customPath?: string,
+    targetServerObj?: ServerInstance,
+    targetDbNameParam?: string
+  ) => {
     setIsTriggeringBackup(true);
-    const targetDbName = activeDb?.datname || selectedDatabaseName || 'postgres';
+    const srv = targetServerObj || activeServerObject;
+    const targetDbName = targetDbNameParam || activeDb?.datname || selectedDatabaseName || srv?.databases[0]?.datname || 'postgres';
     try {
       const res = await fetch('/api/db/backups/trigger', {
         method: 'POST',
@@ -320,9 +341,9 @@ export default function App() {
         body: JSON.stringify({
           type,
           location: customPath,
-          serverId: activeServerObject?.id,
-          serverName: activeServerObject?.name || activeServerObject?.host,
-          serverHost: activeServerObject?.host,
+          serverId: srv?.id,
+          serverName: srv?.name || srv?.host,
+          serverHost: srv?.host,
           databaseName: targetDbName
         })
       });
@@ -671,7 +692,7 @@ export default function App() {
             servers={fleetServers}
             selectedServerId={activeServerObject.id}
             selectedDatabaseName={activeDb?.datname || selectedDatabaseName}
-            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
           />
         )}
@@ -682,7 +703,7 @@ export default function App() {
             servers={fleetServers}
             selectedServerId={selectedServerId}
             selectedDatabaseName={selectedDatabaseName}
-            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
             metrics={metrics}
             stuckQueries={stuckQueries}
@@ -703,7 +724,7 @@ export default function App() {
             servers={fleetServers}
             activeAlerts={activeAlerts}
             metrics={metrics}
-            onSelectServer={(serverId) => setSelectedServerId(serverId)}
+            onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSwitchTab={(tab) => setActiveTab(tab)}
             onOpenConnectionsModal={() => setShowConnectionsModal(true)}
           />
@@ -848,13 +869,7 @@ export default function App() {
               server={activeServerObject}
               databaseName={activeDb?.datname || selectedDatabaseName}
               servers={fleetServers}
-              onSelectServer={(srvId) => {
-                setSelectedServerId(srvId);
-                const targetServer = fleetServers.find((s) => s.id === srvId);
-                if (targetServer && targetServer.databases.length > 0) {
-                  setSelectedDatabaseName(targetServer.databases[0].datname);
-                }
-              }}
+              onSelectServer={(srvId) => handleSelectServer(srvId)}
               onSelectDatabase={(dbName) => setSelectedDatabaseName(dbName)}
             />
           ) : (

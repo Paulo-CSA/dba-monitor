@@ -6,7 +6,12 @@ import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
   backupOverview: BackupOverview;
-  onTriggerBackup: (type: 'pg_dump' | 'pg_basebackup', customPath?: string) => void;
+  onTriggerBackup: (
+    type: 'pg_dump' | 'pg_basebackup',
+    customPath?: string,
+    targetServerObj?: ServerInstance,
+    targetDbNameParam?: string
+  ) => void;
   onDeleteBackup?: (id: string) => void;
   onClearAllBackups?: () => void;
   isTriggering: boolean;
@@ -153,7 +158,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
             <div className="flex items-center space-x-1.5">
               <Database className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-slate-400">Banco:</span>
-              {server && server.databases.length > 1 && onSelectDatabase ? (
+              {server && server.databases.length > 0 && onSelectDatabase ? (
                 <select
                   value={currentDbName}
                   onChange={(e) => onSelectDatabase(e.target.value)}
@@ -202,7 +207,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
           <div className="md:col-span-2">
             <button
-              onClick={() => onTriggerBackup(selectedType, customPath)}
+              onClick={() => onTriggerBackup(selectedType, customPath, server, currentDbName)}
               disabled={isTriggering}
               className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer whitespace-nowrap"
             >
