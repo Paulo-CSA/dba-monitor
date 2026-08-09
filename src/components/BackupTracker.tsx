@@ -303,7 +303,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                   const db = bkp.databaseName || 'postgres';
                   const cmdStr = bkp.command || (bkp.type === 'pg_dump'
                     ? `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
-                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}" -F t -z`);
+                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}"`);
 
                   return (
                     <tr key={bkp.id} className="hover:bg-slate-800/40">
