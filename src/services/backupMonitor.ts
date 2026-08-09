@@ -202,12 +202,19 @@ SELECT pg_catalog.set_config('search_path', '', false);
     let notes = '';
 
     if (targetLocationType === 'remote') {
-      if (type === 'pg_dump') {
-        command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c | ssh -p ${sshPort} ${sshUser}@${sshHost} "cat > '${requestedLocation}'"`;
-      } else {
-        command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}" | ssh -p ${sshPort} ${sshUser}@${sshHost} "cat > '${requestedLocation}'"`;
-      }
-      notes = `Backup remoto via SSH (${sshUser}@${sshHost}:${sshPort}) enviado para o destino: ${requestedLocation}`;
+      const portSshFlag = sshPort && sshPort !== 22 ? `-p ${sshPort} ` : '';
+      const portScpFlag = sshPort && sshPort !== 22 ? `-P ${sshPort} ` : '';
+      
+      const sshMkdirCmd = `ssh ${portSshFlag}${sshUser}@${sshHost} "mkdir -p ${targetDir}"`;
+      const scpTransferCmd = `scp ${portScpFlag}${requestedLocation} ${sshUser}@${sshHost}:${targetDir}/`;
+      const rmLocalCmd = `rm -f ${requestedLocation}`;
+
+      const localDumpCmd = type === 'pg_dump'
+        ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
+        : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
+
+      command = `${localDumpCmd} && \\\n${sshMkdirCmd} && \\\n${scpTransferCmd} && \\\n${rmLocalCmd}`;
+      notes = `Backup gerado localmente em ${requestedLocation} e transferido via SSH/SCP para ${sshUser}@${sshHost}:${requestedLocation}`;
     } else {
       if (type === 'pg_dump') {
         command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
