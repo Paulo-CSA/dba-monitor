@@ -204,19 +204,23 @@ SELECT pg_catalog.set_config('search_path', '', false);
     if (targetLocationType === 'remote') {
       const sshTarget = `${sshUser}@${sshHost}`;
       const sshPortNum = Number(sshPort);
-      const sshPortCmd = sshPortNum && sshPortNum !== 22 ? `ssh -p ${sshPortNum}` : 'ssh';
-      const scpPortCmd = sshPortNum && sshPortNum !== 22 ? `scp -P ${sshPortNum}` : 'scp';
+      const portSshFlag = sshPortNum && sshPortNum !== 22 ? `-p ${sshPortNum} ` : '';
+      const portScpFlag = sshPortNum && sshPortNum !== 22 ? `-P ${sshPortNum} ` : '';
+
+      const passPrefix = opts.sshPassword 
+        ? `sshpass -p '${opts.sshPassword.replace(/'/g, "'\\''")}' `
+        : '';
 
       const localDumpCmd = type === 'pg_dump'
         ? `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`
         : `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
 
-      const sshMkdirCmd = `${sshPortCmd} ${sshTarget} "mkdir -p ${targetDir}"`;
-      const scpTransferCmd = `${scpPortCmd} ${requestedLocation} ${sshTarget}:${targetDir}/`;
+      const sshMkdirCmd = `${passPrefix}ssh ${portSshFlag}${sshTarget} "mkdir -p ${targetDir}"`;
+      const scpTransferCmd = `${passPrefix}scp ${portScpFlag}${requestedLocation} ${sshTarget}:${targetDir}/`;
       const rmLocalCmd = `rm -f ${requestedLocation}`;
 
       command = `${localDumpCmd} && \\\n${sshMkdirCmd} && \\\n${scpTransferCmd} && \\\n${rmLocalCmd}`;
-      notes = `Backup gerado em ${requestedLocation}, enviado via SCP para ${sshTarget}:${targetDir}/ e removido do servidor local.`;
+      notes = `Backup gerado em ${requestedLocation}, enviado via SCP (${passPrefix ? 'com sshpass' : 'com senha'}) para ${sshTarget}:${targetDir}/ e removido do servidor local.`;
     } else {
       if (type === 'pg_dump') {
         command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
