@@ -847,6 +847,15 @@ export default function App() {
               isTriggering={isTriggeringBackup}
               server={activeServerObject}
               databaseName={activeDb?.datname || selectedDatabaseName}
+              servers={fleetServers}
+              onSelectServer={(srvId) => {
+                setSelectedServerId(srvId);
+                const targetServer = fleetServers.find((s) => s.id === srvId);
+                if (targetServer && targetServer.databases.length > 0) {
+                  setSelectedDatabaseName(targetServer.databases[0].datname);
+                }
+              }}
+              onSelectDatabase={(dbName) => setSelectedDatabaseName(dbName)}
             />
           ) : (
             renderEmptyServerState()

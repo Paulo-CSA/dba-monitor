@@ -12,6 +12,9 @@ interface BackupTrackerProps {
   isTriggering: boolean;
   server?: ServerInstance;
   databaseName?: string;
+  servers?: ServerInstance[];
+  onSelectServer?: (serverId: string) => void;
+  onSelectDatabase?: (dbName: string) => void;
 }
 
 export const BackupTracker: React.FC<BackupTrackerProps> = ({
@@ -21,24 +24,27 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   onClearAllBackups,
   isTriggering,
   server,
-  databaseName
+  databaseName,
+  servers = [],
+  onSelectServer,
+  onSelectDatabase
 }) => {
   const [selectedType, setSelectedType] = useState<'pg_basebackup' | 'pg_dump'>('pg_basebackup');
   const [customPath, setCustomPath] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'selected'>('all');
 
-  const srvFolder = server ? (server.name || server.host).replace(/[^a-zA-Z0-9_-]/g, '_') : 'servidor_padrao';
-  const dbFolder = (databaseName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
+  const currentDbName = databaseName || 'postgres';
+
+  const srvFolder = currentServerName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dbFolder = currentDbName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const defaultPath = `/database/backups/postgresql/${srvFolder}/${dbFolder}/`;
 
   useEffect(() => {
-    setCustomPath(defaultPath);
-  }, [server?.id, server?.name, server?.host, databaseName]);
+    setCustomPath(`/database/backups/postgresql/${srvFolder}/${dbFolder}/`);
+  }, [server?.id, server?.name, server?.host, databaseName, srvFolder, dbFolder]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
-
-  const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
-  const currentDbName = databaseName || 'postgres';
 
   const filteredBackups = backupOverview.recentBackups.filter((b) => {
     if (filterMode === 'all') return true;
@@ -124,16 +130,44 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
           </div>
 
           <div className="bg-slate-950/90 border border-slate-800/80 rounded-xl px-3 py-2 flex items-center space-x-3 text-xs">
-            <div className="flex items-center space-x-1.5 text-cyan-300">
+            <div className="flex items-center space-x-1.5">
               <Server className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-slate-400">Servidor:</span>
-              <span className="font-bold font-mono text-white">{currentServerName}</span>
+              {servers.length > 1 && onSelectServer ? (
+                <select
+                  value={server?.id || ''}
+                  onChange={(e) => onSelectServer(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-white text-xs font-bold font-mono rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+                >
+                  {servers.map((srv) => (
+                    <option key={srv.id} value={srv.id}>
+                      {srv.name || srv.host}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold font-mono text-white">{currentServerName}</span>
+              )}
             </div>
             <div className="h-3 w-px bg-slate-800" />
-            <div className="flex items-center space-x-1.5 text-emerald-300">
+            <div className="flex items-center space-x-1.5">
               <Database className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-slate-400">Banco:</span>
-              <span className="font-bold font-mono text-emerald-400">{currentDbName}</span>
+              {server && server.databases.length > 1 && onSelectDatabase ? (
+                <select
+                  value={currentDbName}
+                  onChange={(e) => onSelectDatabase(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-emerald-400 text-xs font-bold font-mono rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                >
+                  {server.databases.map((db) => (
+                    <option key={db.datname} value={db.datname}>
+                      {db.datname}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold font-mono text-emerald-400">{currentDbName}</span>
+              )}
             </div>
           </div>
         </div>

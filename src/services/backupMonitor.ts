@@ -40,30 +40,40 @@ export class BackupMonitor {
     const timestampStr = now.toISOString().replace(/[:.]/g, '-');
     const defaultFilename = `backup_${srvClean}_${dbClean}_${type}_${timestampStr}.${ext}`;
 
-    let baseDir = `/var/backups/postgresql/${srvClean}/${dbClean}`;
+    const standardRoot = '/database/backups/postgresql';
+    let baseDir = `${standardRoot}/${srvClean}/${dbClean}`;
     let filename = defaultFilename;
 
     if (opts.customPath && opts.customPath.trim().length > 0) {
-      const rawPath = opts.customPath.trim();
-      if (rawPath.endsWith('/') || rawPath.endsWith('\\')) {
-        if (rawPath.includes(srvClean)) {
-          baseDir = rawPath;
-        } else {
-          baseDir = path.join(rawPath, srvClean, dbClean);
-        }
+      let raw = opts.customPath.trim();
+      
+      // If user passed a file path with extension
+      if (raw.match(/\.(sql|tar|gz|bak|dump)$/i)) {
+        filename = path.basename(raw);
+        raw = path.dirname(raw);
+      }
+
+      // Remove trailing slashes
+      raw = raw.replace(/[/\\]+$/, '');
+
+      // Check if raw already ends with /srvClean/dbClean
+      if (raw.endsWith(`${srvClean}/${dbClean}`) || raw.endsWith(`${srvClean}\\${dbClean}`)) {
+        baseDir = raw;
+      } else if (raw.endsWith(srvClean)) {
+        baseDir = `${raw}/${dbClean}`;
       } else {
-        const parsedDir = path.dirname(rawPath);
-        const parsedFile = path.basename(rawPath);
-        filename = parsedFile;
-        if (parsedDir.includes(srvClean)) {
-          baseDir = parsedDir;
+        // Strip out any trailing server or database folders from other servers (e.g., .../xpto/mandu or .../xpto)
+        // Extract root directory up to /postgresql or /backups or base user directory
+        const rootMatch = raw.match(/^(.*?\/(?:backups\/postgresql|backups|postgresql))/i);
+        if (rootMatch) {
+          baseDir = `${rootMatch[1]}/${srvClean}/${dbClean}`;
         } else {
-          baseDir = path.join(parsedDir, srvClean, dbClean);
+          baseDir = `${raw}/${srvClean}/${dbClean}`;
         }
       }
     }
 
-    let requestedLocation = path.join(baseDir, filename);
+    const requestedLocation = path.join(baseDir, filename);
 
     let actualSavedLocation = requestedLocation;
     let savedOnDisk = false;
