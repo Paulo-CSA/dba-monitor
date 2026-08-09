@@ -170,6 +170,11 @@ SELECT pg_catalog.set_config('search_path', '', false);
       : `${Math.round(fileSize / 1024)} KB`;
 
     const srvId = opts.serverId || `srv-${srvClean}`;
+    const hostName = opts.serverHost || srvName;
+
+    const command = type === 'pg_dump'
+      ? `pg_dump -h ${hostName} -p 5432 -U postgres -d ${dbName} -F c -f "${actualSavedLocation}"`
+      : `pg_basebackup -h ${hostName} -p 5432 -U postgres -D "${actualSavedLocation}" -F t -z`;
 
     const newEntry: BackupEntry = {
       id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
@@ -181,11 +186,12 @@ SELECT pg_catalog.set_config('search_path', '', false);
       sizeBytes: fileSize,
       sizeFormatted,
       location: actualSavedLocation,
+      command,
       checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
       verifiedIntegrity: true,
       serverId: srvId,
       serverName: srvName,
-      serverHost: opts.serverHost || srvName,
+      serverHost: hostName,
       databaseName: dbName,
       notes: savedOnDisk 
         ? `Backup do banco "${dbName}" no servidor "${srvName}" salvo em: ${actualSavedLocation}`

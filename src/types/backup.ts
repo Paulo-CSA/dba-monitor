@@ -8,6 +8,7 @@ export interface BackupEntry {
   sizeBytes: number;
   sizeFormatted: string;
   location: string;
+  command?: string;
   checksum: string;
   verifiedIntegrity: boolean;
   notes?: string;

@@ -149,7 +149,16 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
               {servers.length > 1 && onSelectServer ? (
                 <select
                   value={server?.id || ''}
-                  onChange={(e) => onSelectServer(e.target.value)}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    onSelectServer(selectedId);
+                    const foundSrv = servers.find((s) => s.id === selectedId);
+                    if (foundSrv) {
+                      const sName = (foundSrv.name || foundSrv.host).replace(/[^a-zA-Z0-9_-]/g, '_');
+                      const dName = (foundSrv.databases[0]?.datname || currentDbName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
+                      setCustomPath(`/database/backups/postgresql/${sName}/${dName}/`);
+                    }
+                  }}
                   className="bg-slate-900 border border-slate-700 text-white text-xs font-bold font-mono rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
                 >
                   {servers.map((srv) => (
@@ -273,7 +282,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 <th className="py-2.5 px-4">ID / Identificador</th>
                 <th className="py-2.5 px-4">Servidor</th>
                 <th className="py-2.5 px-4">Banco (`datname`)</th>
-                <th className="py-2.5 px-4">Tipo</th>
+                <th className="py-2.5 px-4">Tipo & Comando CLI Executado</th>
                 <th className="py-2.5 px-4">Data e Hora</th>
                 <th className="py-2.5 px-4">Tamanho</th>
                 <th className="py-2.5 px-4">Status & Integridade</th>
@@ -289,26 +298,39 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredBackups.map((bkp) => (
-                  <tr key={bkp.id} className="hover:bg-slate-800/40">
-                    <td className="py-3 px-4 font-mono font-bold text-cyan-300">{bkp.id}</td>
-                    <td className="py-3 px-4 font-mono text-slate-200">
-                      <span className="flex items-center space-x-1">
-                        <Server className="w-3 h-3 text-cyan-400 inline" />
-                        <span>{bkp.serverName || bkp.serverId || 'Servidor Central'}</span>
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-400">
-                      <span className="flex items-center space-x-1">
-                        <Database className="w-3 h-3 text-emerald-400 inline" />
-                        <span>{bkp.databaseName || 'postgres'}</span>
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-300">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
-                        {bkp.type}
-                      </span>
-                    </td>
+                filteredBackups.map((bkp) => {
+                  const host = bkp.serverHost || bkp.serverName || 'localhost';
+                  const db = bkp.databaseName || 'postgres';
+                  const cmdStr = bkp.command || (bkp.type === 'pg_dump'
+                    ? `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
+                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}" -F t -z`);
+
+                  return (
+                    <tr key={bkp.id} className="hover:bg-slate-800/40">
+                      <td className="py-3 px-4 font-mono font-bold text-cyan-300">{bkp.id}</td>
+                      <td className="py-3 px-4 font-mono text-slate-200">
+                        <span className="flex items-center space-x-1">
+                          <Server className="w-3 h-3 text-cyan-400 inline" />
+                          <span>{bkp.serverName || bkp.serverId || 'Servidor Central'}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-400">
+                        <span className="flex items-center space-x-1">
+                          <Database className="w-3 h-3 text-emerald-400 inline" />
+                          <span>{db}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-300">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold">
+                          {bkp.type}
+                        </span>
+                        <div
+                          className="mt-1 text-[10px] text-cyan-400 bg-slate-950 px-2 py-1 rounded border border-slate-800 font-mono max-w-xs truncate cursor-help"
+                          title={cmdStr}
+                        >
+                          {cmdStr}
+                        </div>
+                      </td>
                     <td className="py-3 px-4 text-slate-300 font-mono">{formatDateTime(bkp.startTime)}</td>
                     <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
                     <td className="py-3 px-4 font-mono">
@@ -336,8 +358,9 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                       )}
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>
