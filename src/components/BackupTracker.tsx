@@ -1,25 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import {
-  HardDrive,
-  CheckCircle2,
-  Clock,
-  ShieldCheck,
-  Plus,
-  Play,
-  Server,
-  Database,
-  Trash2,
-  AlertTriangle,
-  Copy,
-  Check,
-  Terminal,
-  Container,
-  Key,
-  FileText,
-  HelpCircle
-} from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Plus, Play, Server, Database, Trash2, Filter } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -55,19 +37,16 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [selectedType, setSelectedType] = useState<'pg_basebackup' | 'pg_dump'>('pg_basebackup');
   const [customPath, setCustomPath] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'selected'>('all');
-  const [commandMode, setCommandMode] = useState<'docker' | 'native' | 'ssh' | 'pg_dump'>('docker');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showVersionGuide, setShowVersionGuide] = useState<boolean>(true);
 
   const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
   const currentDbName = databaseName || 'postgres';
 
   const srvFolder = currentServerName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const dbFolder = currentDbName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const defaultPath = `/backups/postgresql/${srvFolder}/${dbFolder}/`;
+  const defaultPath = `/database/backups/postgresql/${srvFolder}/${dbFolder}/`;
 
   useEffect(() => {
-    setCustomPath(`/backups/postgresql/${srvFolder}/${dbFolder}/`);
+    setCustomPath(`/database/backups/postgresql/${srvFolder}/${dbFolder}/`);
   }, [server?.id, server?.name, server?.host, databaseName, srvFolder, dbFolder]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
@@ -86,12 +65,6 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
     return matchSrv && matchDb;
   });
-
-  const handleCopyCommand = (cmdText: string, id: string) => {
-    navigator.clipboard.writeText(cmdText);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2500);
-  };
 
   return (
     <div className="space-y-6">
@@ -158,64 +131,6 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
         </div>
       </div>
 
-      {/* PostgreSQL Version Mismatch Alert & Guidance Banner */}
-      <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-            <h4 className="text-sm font-bold text-amber-200">
-              Solução para Erro &quot;incompatible server version&quot; (Servidor XPTO vs Servidor Remoto)
-            </h4>
-          </div>
-          <button
-            onClick={() => setShowVersionGuide(!showVersionGuide)}
-            className="text-xs text-amber-400 hover:text-amber-300 flex items-center space-x-1 underline cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>{showVersionGuide ? 'Ocultar Explicação' : 'Como Resolver?'}</span>
-          </button>
-        </div>
-
-        {showVersionGuide && (
-          <div className="text-xs text-slate-300 space-y-2 pt-1 border-t border-amber-500/20">
-            <p>
-              O erro <code className="bg-slate-950 text-rose-300 px-1.5 py-0.5 rounded font-mono">pg_basebackup: error: incompatible server version 16.14</code> ocorre quando a versão do PostgreSQL no servidor onde você digita o comando (ex: <strong className="text-white">PostgreSQL 14</strong> no servidor da aplicação XPTO) é inferior à do banco de destino (ex: <strong className="text-white">PostgreSQL 16</strong> em <code className="text-cyan-300 font-mono">192.168.10.113</code>).
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-cyan-400 flex items-center space-x-1.5">
-                  <Container className="w-4 h-4 text-cyan-400" />
-                  <span>1. Opção Docker (Recomendada)</span>
-                </span>
-                <p className="text-[11px] text-slate-400">
-                  Usa o cliente <code className="text-cyan-300 font-mono">postgres:16</code> isolado. Baixa e executa o backup perfeitamente de qualquer máquina host sem mudar pacotes nativos.
-                </p>
-              </div>
-
-              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-emerald-400 flex items-center space-x-1.5">
-                  <Key className="w-4 h-4 text-emerald-400" />
-                  <span>2. Opção SSH Remoto</span>
-                </span>
-                <p className="text-[11px] text-slate-400">
-                  Executa o comando <code className="text-emerald-300 font-mono">pg_basebackup</code> via SSH diretamente no próprio servidor remoto onde o PostgreSQL 16 já está instalado.
-                </p>
-              </div>
-
-              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-                <span className="font-bold text-purple-400 flex items-center space-x-1.5">
-                  <FileText className="w-4 h-4 text-purple-400" />
-                  <span>3. Opção pg_dump (Lógico)</span>
-                </span>
-                <p className="text-[11px] text-slate-400">
-                  O <code className="text-purple-300 font-mono">pg_dump</code> permite exportar dados e tabelas com compatibilidade total entre versões de cluster distintas.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Manual Backup Trigger Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -241,14 +156,14 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                     if (foundSrv) {
                       const sName = (foundSrv.name || foundSrv.host).replace(/[^a-zA-Z0-9_-]/g, '_');
                       const dName = (foundSrv.databases[0]?.datname || currentDbName || 'postgres').replace(/[^a-zA-Z0-9_-]/g, '_');
-                      setCustomPath(`/backups/postgresql/${sName}/${dName}/`);
+                      setCustomPath(`/database/backups/postgresql/${sName}/${dName}/`);
                     }
                   }}
                   className="bg-slate-900 border border-slate-700 text-white text-xs font-bold font-mono rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
                 >
                   {servers.map((srv) => (
                     <option key={srv.id} value={srv.id}>
-                      {srv.name || srv.host} ({srv.pgVersion || 'PG'})
+                      {srv.name || srv.host}
                     </option>
                   ))}
                 </select>
@@ -349,70 +264,15 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
             </div>
           </div>
 
-          {/* Mode selector for commands */}
-          <div className="flex items-center space-x-2">
-            <span className="text-[11px] font-semibold text-slate-400">Modo do Comando CLI:</span>
-            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-              <button
-                onClick={() => setCommandMode('docker')}
-                title="Usar Docker com a versão exata da imagem do servidor (evita erro incompatibilidade)"
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                  commandMode === 'docker'
-                    ? 'bg-cyan-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Container className="w-3.5 h-3.5" />
-                <span>Docker</span>
-              </button>
-              <button
-                onClick={() => setCommandMode('native')}
-                title="Comando nativo direto no terminal"
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                  commandMode === 'native'
-                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                <span>Nativo</span>
-              </button>
-              <button
-                onClick={() => setCommandMode('ssh')}
-                title="Executar diretamente via SSH no servidor de destino"
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                  commandMode === 'ssh'
-                    ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>SSH</span>
-              </button>
-              <button
-                onClick={() => setCommandMode('pg_dump')}
-                title="Exportação lógica via pg_dump"
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                  commandMode === 'pg_dump'
-                    ? 'bg-purple-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>pg_dump</span>
-              </button>
-            </div>
-
-            {backupOverview.recentBackups.length > 0 && onClearAllBackups && (
-              <button
-                onClick={onClearAllBackups}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer ml-2"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Limpar Logs</span>
-              </button>
-            )}
-          </div>
+          {backupOverview.recentBackups.length > 0 && onClearAllBackups && (
+            <button
+              onClick={onClearAllBackups}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Limpar Todos os Logs</span>
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -420,19 +280,20 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
             <thead>
               <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 <th className="py-2.5 px-4">ID / Identificador</th>
-                <th className="py-2.5 px-4">Servidor Target</th>
+                <th className="py-2.5 px-4">Servidor</th>
                 <th className="py-2.5 px-4">Banco (`datname`)</th>
-                <th className="py-2.5 px-4">Tipo & Comando Pronto para Execução</th>
+                <th className="py-2.5 px-4">Tipo & Comando CLI Executado</th>
                 <th className="py-2.5 px-4">Data e Hora</th>
                 <th className="py-2.5 px-4">Tamanho</th>
                 <th className="py-2.5 px-4">Status & Integridade</th>
+                <th className="py-2.5 px-4">Destino no Storage</th>
                 <th className="py-2.5 px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {filteredBackups.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={9} className="py-8 text-center text-slate-500 font-mono">
                     Nenhum backup registrado para os filtros selecionados. Clique em &quot;Iniciar Backup&quot; para disparar um backup.
                   </td>
                 </tr>
@@ -440,31 +301,9 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 filteredBackups.map((bkp) => {
                   const host = bkp.serverHost || bkp.serverName || 'localhost';
                   const db = bkp.databaseName || 'postgres';
-                  const targetVer = bkp.targetPgVersion || server?.pgVersion || '16';
-                  const pgMajorVer = targetVer.match(/\d+/)?.[0] || '16';
-
-                  const parentDir = bkp.location.includes('/')
-                    ? bkp.location.substring(0, bkp.location.lastIndexOf('/'))
-                    : bkp.location;
-
-                  let activeCmd = '';
-                  if (commandMode === 'docker') {
-                    activeCmd = bkp.commandDocker || (bkp.type === 'pg_dump'
-                      ? `docker run --rm -v "${parentDir}:${parentDir}" postgres:${pgMajorVer} pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
-                      : `docker run --rm -v "${parentDir}:${parentDir}" postgres:${pgMajorVer} pg_basebackup -h ${host} -p 5432 -U postgres -D "${parentDir}" -F t -z`);
-                  } else if (commandMode === 'ssh') {
-                    activeCmd = bkp.commandSsh || (bkp.type === 'pg_dump'
-                      ? `ssh postgres@${host} "pg_dump -p 5432 -U postgres -d ${db} -F c -f \"${bkp.location}\""`
-                      : `ssh postgres@${host} "pg_basebackup -p 5432 -U postgres -D \"${parentDir}\" -F t -z"`);
-                  } else if (commandMode === 'pg_dump') {
-                    activeCmd = bkp.commandPgDump || `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location.replace(/\.(tar\.gz|sql)$/, '.dump')}"`;
-                  } else {
-                    activeCmd = bkp.command || (bkp.type === 'pg_dump'
-                      ? `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
-                      : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${parentDir}" -F t -z`);
-                  }
-
-                  const isCopied = copiedId === bkp.id;
+                  const cmdStr = bkp.command || (bkp.type === 'pg_dump'
+                    ? `pg_dump -h ${host} -p 5432 -U postgres -d ${db} -F c -f "${bkp.location}"`
+                    : `pg_basebackup -h ${host} -p 5432 -U postgres -D "${bkp.location}" -F t -z`);
 
                   return (
                     <tr key={bkp.id} className="hover:bg-slate-800/40">
@@ -474,9 +313,6 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                           <Server className="w-3 h-3 text-cyan-400 inline" />
                           <span>{bkp.serverName || bkp.serverId || 'Servidor Central'}</span>
                         </span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
-                          {host} ({targetVer})
-                        </span>
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-emerald-400">
                         <span className="flex items-center space-x-1">
@@ -485,57 +321,46 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-300">
-                        <div className="flex items-center space-x-2">
-                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-[10px]">
-                            {bkp.type}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 text-[10px] uppercase font-bold">
-                            {commandMode}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center space-x-1.5">
-                          <div
-                            className="text-[10px] text-cyan-300 bg-slate-950 px-2 py-1 rounded border border-slate-800 font-mono max-w-sm truncate cursor-help"
-                            title={activeCmd}
-                          >
-                            {activeCmd}
-                          </div>
-                          <button
-                            onClick={() => handleCopyCommand(activeCmd, bkp.id)}
-                            title="Copiar comando exatamente como formatado"
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
-                          >
-                            {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold">
+                          {bkp.type}
+                        </span>
+                        <div
+                          className="mt-1 text-[10px] text-cyan-400 bg-slate-950 px-2 py-1 rounded border border-slate-800 font-mono max-w-xs truncate cursor-help"
+                          title={cmdStr}
+                        >
+                          {cmdStr}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-slate-300 font-mono">{formatDateTime(bkp.startTime)}</td>
-                      <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
-                      <td className="py-3 px-4 font-mono">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                            {bkp.status.toUpperCase()}
-                          </span>
-                          {bkp.verifiedIntegrity && (
-                            <span className="text-[10px] text-cyan-400 font-semibold">(Integridade OK)</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {onDeleteBackup && (
-                          <button
-                            onClick={() => onDeleteBackup(bkp.id)}
-                            title="Excluir este registro de log"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                    <td className="py-3 px-4 text-slate-300 font-mono">{formatDateTime(bkp.startTime)}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
+                    <td className="py-3 px-4 font-mono">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                          {bkp.status.toUpperCase()}
+                        </span>
+                        {bkp.verifiedIntegrity && (
+                          <span className="text-[10px] text-cyan-400 font-semibold">(Integridade OK)</span>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-400 truncate max-w-xs" title={bkp.location}>
+                      {bkp.location}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {onDeleteBackup && (
+                        <button
+                          onClick={() => onDeleteBackup(bkp.id)}
+                          title="Excluir este registro de log"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>
