@@ -4,10 +4,10 @@ import { Database, Activity, FileText, Bell, RefreshCw, Zap, ShieldCheck, HardDr
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  isLive: boolean;
-  setIsLive: (live: boolean) => void;
   refreshIntervalMs: number;
   setRefreshIntervalMs: (ms: number) => void;
+  onManualRefresh: () => void;
+  isRefreshing?: boolean;
   isLoadSpike?: boolean;
   onToggleLoadSpike?: () => void;
   onOpenExportModal: () => void;
@@ -21,10 +21,10 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
-  isLive,
-  setIsLive,
   refreshIntervalMs,
   setRefreshIntervalMs,
+  onManualRefresh,
+  isRefreshing = false,
   onOpenExportModal,
   onOpenAlertModal,
   onOpenConnectionModal,
@@ -62,17 +62,15 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Actions & Live Stream Controls */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Live Indicator Toggle */}
+            {/* Refresh Button */}
             <button
-              onClick={() => setIsLive(!isLive)}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                isLive
-                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 hover:bg-emerald-900/80'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
-              }`}
+              onClick={onManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 hover:bg-cyan-900/80 hover:border-cyan-700 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+              title="Forçar sincronização e atualização de todos os servidores e bancos de dados"
             >
-              <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
-              <span>{isLive ? 'Ao Vivo' : 'Pausado'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
             </button>
 
             {/* Refresh Interval Selector */}
