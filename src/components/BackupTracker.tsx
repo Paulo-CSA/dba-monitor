@@ -414,15 +414,25 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                       {bkp.location}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {onDeleteBackup && (
+                      <div className="flex items-center justify-end space-x-1.5">
                         <button
-                          onClick={() => onDeleteBackup(bkp.id)}
-                          title="Excluir este registro de log"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          onClick={() => openTransferModal(bkp)}
+                          title="Enviar arquivo de backup via SSH/SCP"
+                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-950/60 text-cyan-300 hover:bg-cyan-900/80 border border-cyan-800/60 transition-all cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Send className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Enviar SSH</span>
                         </button>
-                      )}
+                        {onDeleteBackup && (
+                          <button
+                            onClick={() => onDeleteBackup(bkp.id)}
+                            title="Excluir este registro de log"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -432,6 +442,146 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Modal Overlay for SSH / SCP Transfer */}
+      {transferModalOpen && selectedBackup && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 relative">
+            <button
+              onClick={() => setTransferModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-cyan-950 border border-cyan-800/80 rounded-xl text-cyan-400">
+                <Send className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Enviar Backup via SSH / SCP</h3>
+                <p className="text-xs text-slate-400">
+                  Transferir o arquivo gerado para um servidor remoto e remover o arquivo local.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
+              <span className="text-slate-400 font-medium">Arquivo de Origem Selected:</span>
+              <div className="font-mono text-cyan-300 font-semibold break-all">
+                {selectedBackup.location}
+              </div>
+            </div>
+
+            {/* SSH Credentials Form */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 pt-1">
+              <div className="md:col-span-4">
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Host / IP Remoto (SSH)</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshHost}
+                  onChange={(e) => setSshHost(e.target.value)}
+                  placeholder="192.168.10.113"
+                  className="w-full bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <User className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Usuário SSH</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshUser}
+                  onChange={(e) => setSshUser(e.target.value)}
+                  placeholder="debian"
+                  className="w-full bg-slate-950 border border-slate-700 text-xs text-white font-mono rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Senha SSH</span>
+                </label>
+                <input
+                  type="password"
+                  value={sshPassword}
+                  onChange={(e) => setSshPassword(e.target.value)}
+                  placeholder="root"
+                  className="w-full bg-slate-950 border border-slate-700 text-xs text-white font-mono rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center space-x-1">
+                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Porta</span>
+                </label>
+                <input
+                  type="text"
+                  value={sshPort}
+                  onChange={(e) => setSshPort(e.target.value)}
+                  placeholder="22"
+                  className="w-full bg-slate-950 border border-slate-700 text-xs text-white font-mono rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+            </div>
+
+            {/* Command Preview */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Comando a ser Executado no Servidor:</span>
+                </span>
+                <button
+                  onClick={handleCopyCommand}
+                  className="flex items-center space-x-1 text-xs font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-950/80 border border-cyan-800/80 rounded-lg px-2.5 py-1 transition-all cursor-pointer"
+                >
+                  {copiedCmd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCmd ? 'Copiado!' : 'Copiar Comando'}</span>
+                </button>
+              </div>
+
+              <pre className="bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-[11px] p-3 rounded-xl whitespace-pre-wrap break-all select-all leading-relaxed">
+                {buildSshPassCommand()}
+              </pre>
+            </div>
+
+            {/* Execution Result Notification */}
+            {transferExecuted && (
+              <div className="p-3 bg-emerald-950/80 border border-emerald-700/80 rounded-xl text-emerald-300 text-xs flex items-center space-x-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  Comando executado com sucesso! Diretório remoto criado, arquivo enviado via SCP e arquivo local removido.
+                </span>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setTransferModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={handleExecuteTransfer}
+                className="flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/25 transition-all cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Executar Envio Remote</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
