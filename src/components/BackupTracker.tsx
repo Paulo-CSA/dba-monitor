@@ -47,6 +47,8 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [sshPort, setSshPort] = useState<string>('22');
   const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
   const [transferExecuted, setTransferExecuted] = useState<boolean>(false);
+  const [isExecutingTransfer, setIsExecutingTransfer] = useState<boolean>(false);
+  const [transferResult, setTransferResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
 
   const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
   const currentDbName = databaseName || 'postgres';
@@ -85,6 +87,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       setSshHost(bkp.serverHost);
     }
     setTransferExecuted(false);
+    setTransferResult(null);
     setCopiedCmd(false);
     setTransferModalOpen(true);
   };
@@ -98,11 +101,11 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
     return '/backups';
   };
 
-  const buildSshPassCommand = () => {
+  const buildSshPassCommand = (maskPassword = true) => {
     if (!selectedBackup) return '';
     const loc = selectedBackup.location;
     const targetDir = getTargetDirFromLocation(loc);
-    const pass = sshPassword || 'root';
+    const pass = maskPassword ? '••••••••' : (sshPassword || 'root');
     const user = sshUser || 'debian';
     const host = sshHost || '192.168.10.113';
     const portNum = Number(sshPort) || 22;
@@ -118,14 +121,56 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   };
 
   const handleCopyCommand = () => {
-    const cmd = buildSshPassCommand();
+    const cmd = buildSshPassCommand(false);
     navigator.clipboard.writeText(cmd);
     setCopiedCmd(true);
     setTimeout(() => setCopiedCmd(false), 2500);
   };
 
-  const handleExecuteTransfer = () => {
-    setTransferExecuted(true);
+  const handleExecuteTransfer = async () => {
+    if (!selectedBackup) return;
+    setIsExecutingTransfer(true);
+    setTransferResult(null);
+    setTransferExecuted(false);
+
+    try {
+      const res = await fetch('/api/db/backups/transfer-ssh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backupId: selectedBackup.id,
+          location: selectedBackup.location,
+          sshHost,
+          sshUser,
+          sshPassword,
+          sshPort: Number(sshPort) || 22
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setTransferExecuted(true);
+        setTransferResult({
+          success: true,
+          message: data.message || 'Transferência realizada com sucesso!',
+          details: data.stdout
+        });
+      } else {
+        setTransferResult({
+          success: false,
+          message: data.message || 'Erro ao executar transferência SSH no servidor.',
+          details: data.error || data.stderr
+        });
+      }
+    } catch (err) {
+      setTransferResult({
+        success: false,
+        message: 'Erro de comunicação ao acionar o servidor.',
+        details: err instanceof Error ? err.message : String(err)
+      });
+    } finally {
+      setIsExecutingTransfer(false);
+    }
   };
 
   return (
@@ -538,10 +583,15 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 <span className="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
                   <Terminal className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Comando a ser Executado no Servidor:</span>
+                  <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center space-x-1">
+                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                    <span>Senha protegida</span>
+                  </span>
                 </span>
                 <button
                   onClick={handleCopyCommand}
                   className="flex items-center space-x-1 text-xs font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-950/80 border border-cyan-800/80 rounded-lg px-2.5 py-1 transition-all cursor-pointer"
+                  title="Copiar comando completo com senha"
                 >
                   {copiedCmd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedCmd ? 'Copiado!' : 'Copiar Comando'}</span>
@@ -549,17 +599,40 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
               </div>
 
               <pre className="bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-[11px] p-3 rounded-xl whitespace-pre-wrap break-all select-all leading-relaxed">
-                {buildSshPassCommand()}
+                {buildSshPassCommand(true)}
               </pre>
             </div>
 
-            {/* Execution Result Notification */}
-            {transferExecuted && (
-              <div className="p-3 bg-emerald-950/80 border border-emerald-700/80 rounded-xl text-emerald-300 text-xs flex items-center space-x-2 animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            {/* Execution Loading Indicator */}
+            {isExecutingTransfer && (
+              <div className="p-3 bg-cyan-950/80 border border-cyan-700/80 rounded-xl text-cyan-300 text-xs flex items-center space-x-3 animate-fadeIn">
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
                 <span>
-                  Comando executado com sucesso! Diretório remoto criado, arquivo enviado via SCP e arquivo local removido.
+                  Executando comando de transferência via SSH/SCP no servidor central... Aguarde.
                 </span>
+              </div>
+            )}
+
+            {/* Execution Result Notification */}
+            {transferResult && !isExecutingTransfer && (
+              <div className={`p-3 rounded-xl text-xs space-y-1.5 border animate-fadeIn ${
+                transferResult.success
+                  ? 'bg-emerald-950/80 border-emerald-700/80 text-emerald-300'
+                  : 'bg-rose-950/80 border-rose-800/80 text-rose-300'
+              }`}>
+                <div className="flex items-center space-x-2 font-semibold">
+                  {transferResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <X className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{transferResult.message}</span>
+                </div>
+                {transferResult.details && (
+                  <pre className="font-mono text-[10px] bg-slate-950/90 p-2 rounded-lg text-slate-300 max-h-32 overflow-y-auto break-all whitespace-pre-wrap">
+                    {transferResult.details}
+                  </pre>
+                )}
               </div>
             )}
 
@@ -567,16 +640,27 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
             <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
               <button
                 onClick={() => setTransferModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-all cursor-pointer"
+                disabled={isExecutingTransfer}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 transition-all cursor-pointer"
               >
                 Fechar
               </button>
               <button
                 onClick={handleExecuteTransfer}
-                className="flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/25 transition-all cursor-pointer"
+                disabled={isExecutingTransfer}
+                className="flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-800 text-white shadow-lg shadow-cyan-600/25 transition-all cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Executar Envio Remote</span>
+                {isExecutingTransfer ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Executando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Executar Envio Remoto</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { metricsEngineSingleton } from './src/services/metricsEngine';
@@ -304,6 +305,62 @@ async function startServer() {
   app.delete('/api/db/backups', (req, res) => {
     backupMonitorSingleton.clearAllBackups();
     res.json({ success: true });
+  });
+
+  // Execute SSH transfer command directly on server
+  app.post('/api/db/backups/transfer-ssh', (req, res) => {
+    const { backupId, location, sshHost, sshUser, sshPassword, sshPort } = req.body;
+
+    if (!location) {
+      res.status(400).json({ success: false, error: 'Caminho do arquivo de backup não informado.' });
+      return;
+    }
+
+    const host = sshHost || '192.168.10.113';
+    const user = sshUser || 'debian';
+    const pass = sshPassword || '';
+    const portNum = Number(sshPort) || 22;
+
+    const parts = location.split('/');
+    if (parts.length > 1) {
+      parts.pop();
+    }
+    const targetDir = parts.join('/') || '/backups';
+
+    const sshPortFlag = portNum !== 22 ? `-p ${portNum} ` : '';
+    const scpPortFlag = portNum !== 22 ? `-P ${portNum} ` : '';
+
+    const escapedPass = pass.replace(/'/g, "'\\''");
+
+    const cmdMkdir = `sshpass -p '${escapedPass}' ssh ${sshPortFlag}${user}@${host} "mkdir -p ${targetDir}"`;
+    const cmdScp = `sshpass -p '${escapedPass}' scp ${scpPortFlag}${location} ${user}@${host}:${targetDir}/`;
+    const cmdRm = `rm -f ${location}`;
+
+    const fullCommand = `${cmdMkdir} && ${cmdScp} && ${cmdRm}`;
+
+    console.log(`[SSH Transfer Executing]: sshpass -p '****' ssh ... to ${user}@${host}:${targetDir}`);
+
+    exec(fullCommand, { timeout: 120000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Error executing SSH transfer:', error, stderr);
+        res.json({
+          success: false,
+          error: stderr || error.message,
+          stdout,
+          message: 'Falha na execução do comando SSH/SCP no servidor.'
+        });
+      } else {
+        if (backupId) {
+          // Update backup entry notes if needed
+        }
+        res.json({
+          success: true,
+          message: 'Transferência SSH/SCP concluída com sucesso e arquivo local removido.',
+          stdout,
+          stderr
+        });
+      }
+    });
   });
 
   // Alert Rules
