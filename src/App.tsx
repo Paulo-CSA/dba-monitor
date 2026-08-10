@@ -29,7 +29,7 @@ import { ReportFilterOptions } from './types/export';
 import { exportToCSV } from './utils/csvExporter';
 import { exportToPDF } from './utils/pdfExporter';
 import { analyzeQueryWithAI } from './services/aiDiagnosticService';
-import { formatMs, formatBytes } from './utils/formatters';
+import { formatMs, formatBytes, formatUptimeSeconds } from './utils/formatters';
 
 import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus } from 'lucide-react';
 
@@ -233,6 +233,29 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [isLive, refreshIntervalMs, fetchLiveConnectionsForActiveDb]);
+
+  // Live Uptime Ticker for Active Fleet Servers
+  useEffect(() => {
+    if (!isLive) return;
+
+    const uptimeInterval = setInterval(() => {
+      setFleetServers((prevServers) => {
+        if (prevServers.length === 0) return prevServers;
+        return prevServers.map((srv) => {
+          if (srv.status !== 'healthy') return srv;
+          const currentSecs = srv.uptimeSeconds ?? 86400;
+          const nextSecs = currentSecs + 1;
+          return {
+            ...srv,
+            uptimeSeconds: nextSecs,
+            uptimeFormatted: formatUptimeSeconds(nextSecs)
+          };
+        });
+      });
+    }, 1000);
+
+    return () => clearInterval(uptimeInterval);
+  }, [isLive]);
 
   // Handler for Toggling Load Spike
   const handleToggleLoadSpike = async () => {
@@ -508,14 +531,21 @@ export default function App() {
   const handleDeleteServer = async (serverId: string) => {
     setFleetServers((prev) => {
       const next = prev.filter((srv) => srv.id !== serverId);
-      if (selectedServerId === serverId && next.length > 0) {
-        setSelectedServerId(next[0].id);
-        if (next[0].databases.length > 0) {
-          setSelectedDatabaseName(next[0].databases[0].datname);
+      if (selectedServerId === serverId) {
+        if (next.length > 0) {
+          setSelectedServerId(next[0].id);
+          setSelectedDatabaseName(next[0].databases[0]?.datname || '');
+          setStuckQueries(next[0].stuckQueries || []);
+        } else {
+          setSelectedServerId('');
+          setSelectedDatabaseName('');
+          setStuckQueries([]);
+          setActiveAlerts([]);
         }
       }
       return next;
     });
+
     try {
       await fetch(`/api/db/servers/${serverId}`, { method: 'DELETE' });
     } catch (err) {
