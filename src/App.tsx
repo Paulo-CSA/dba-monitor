@@ -35,9 +35,9 @@ import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activit
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isLive, setIsLive] = useState<boolean>(true);
   const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(2000);
   const [isLoadSpike, setIsLoadSpike] = useState<boolean>(false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Fleet & Observability States
   const [fleetServers, setFleetServers] = useState<ServerInstance[]>([]);
@@ -249,25 +249,6 @@ export default function App() {
     }
   }, [selectedServerId, selectedDatabaseName, activeDb, activeServerObject]);
 
-  // Manual Refresh Handler
-  const handleManualRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      await pollAllFleetServers();
-      const res = await fetch('/api/db/metrics');
-      if (res.ok) {
-        const data = await res.json();
-        setMetrics(data.metrics);
-        setActiveAlerts(data.alerts || []);
-        setIsLoadSpike(data.isLoadSpike);
-      }
-    } catch (err) {
-      console.error('Manual refresh error:', err);
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
-    }
-  }, [pollAllFleetServers]);
-
   // Re-fetch live connections when active server or database changes
   useEffect(() => {
     if (selectedServerId) {
@@ -275,8 +256,10 @@ export default function App() {
     }
   }, [selectedServerId, selectedDatabaseName, pollAllFleetServers]);
 
-  // Real-time Polling Engine (Always Active)
+  // Real-time Polling Engine
   useEffect(() => {
+    if (!isLive) return;
+
     const interval = setInterval(async () => {
       try {
         const res = await fetch('/api/db/metrics');
@@ -293,10 +276,12 @@ export default function App() {
     }, refreshIntervalMs);
 
     return () => clearInterval(interval);
-  }, [refreshIntervalMs, pollAllFleetServers]);
+  }, [isLive, refreshIntervalMs, pollAllFleetServers]);
 
   // Live Uptime Ticker for Active Fleet Servers
   useEffect(() => {
+    if (!isLive) return;
+
     const uptimeInterval = setInterval(() => {
       setFleetServers((prevServers) => {
         if (prevServers.length === 0) return prevServers;
@@ -314,7 +299,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(uptimeInterval);
-  }, []);
+  }, [isLive]);
 
   // Handler for Toggling Load Spike
   const handleToggleLoadSpike = async () => {
@@ -701,9 +686,6 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newServer)
       });
-      setTimeout(() => {
-        pollAllFleetServers();
-      }, 300);
     } catch (err) {
       console.error('Error saving connection server:', err);
     }
@@ -801,10 +783,10 @@ export default function App() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        isLive={isLive}
+        setIsLive={setIsLive}
         refreshIntervalMs={refreshIntervalMs}
         setRefreshIntervalMs={setRefreshIntervalMs}
-        onManualRefresh={handleManualRefresh}
-        isRefreshing={isRefreshing}
         onOpenExportModal={() => setShowExportModal(true)}
         onOpenAlertModal={() => setShowAlertModal(true)}
         onOpenConnectionModal={() => setShowConnectionModal(true)}
