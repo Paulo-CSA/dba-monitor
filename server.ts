@@ -309,58 +309,70 @@ async function startServer() {
 
   // Execute SSH transfer command directly on server
   app.post('/api/db/backups/transfer-ssh', (req, res) => {
-    const { backupId, location, sshHost, sshUser, sshPassword, sshPort } = req.body;
+    try {
+      const { backupId, location, sshHost, sshUser, sshPassword, sshPort } = req.body || {};
 
-    if (!location) {
-      res.status(400).json({ success: false, error: 'Caminho do arquivo de backup não informado.' });
-      return;
-    }
-
-    const host = sshHost || '192.168.10.113';
-    const user = sshUser || 'debian';
-    const pass = sshPassword || '';
-    const portNum = Number(sshPort) || 22;
-
-    const parts = location.split('/');
-    if (parts.length > 1) {
-      parts.pop();
-    }
-    const targetDir = parts.join('/') || '/backups';
-
-    const sshPortFlag = portNum !== 22 ? `-p ${portNum} ` : '';
-    const scpPortFlag = portNum !== 22 ? `-P ${portNum} ` : '';
-
-    const escapedPass = pass.replace(/'/g, "'\\''");
-
-    const cmdMkdir = `sshpass -p '${escapedPass}' ssh ${sshPortFlag}${user}@${host} "mkdir -p ${targetDir}"`;
-    const cmdScp = `sshpass -p '${escapedPass}' scp ${scpPortFlag}${location} ${user}@${host}:${targetDir}/`;
-    const cmdRm = `rm -f ${location}`;
-
-    const fullCommand = `${cmdMkdir} && ${cmdScp} && ${cmdRm}`;
-
-    console.log(`[SSH Transfer Executing]: sshpass -p '****' ssh ... to ${user}@${host}:${targetDir}`);
-
-    exec(fullCommand, { timeout: 120000 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Error executing SSH transfer:', error, stderr);
-        res.json({
-          success: false,
-          error: stderr || error.message,
-          stdout,
-          message: 'Falha na execução do comando SSH/SCP no servidor.'
-        });
-      } else {
-        if (backupId) {
-          // Update backup entry notes if needed
-        }
-        res.json({
-          success: true,
-          message: 'Transferência SSH/SCP concluída com sucesso e arquivo local removido.',
-          stdout,
-          stderr
-        });
+      if (!location) {
+        res.status(400).json({ success: false, error: 'Caminho do arquivo de backup não informado.' });
+        return;
       }
-    });
+
+      const host = sshHost || '192.168.10.113';
+      const user = sshUser || 'debian';
+      const pass = sshPassword || '';
+      const portNum = Number(sshPort) || 22;
+
+      const parts = location.split('/');
+      if (parts.length > 1) {
+        parts.pop();
+      }
+      const targetDir = parts.join('/') || '/backups';
+
+      const sshPortFlag = portNum !== 22 ? `-p ${portNum} ` : '';
+      const scpPortFlag = portNum !== 22 ? `-P ${portNum} ` : '';
+
+      const escapedPass = pass.replace(/'/g, "'\\''");
+
+      // StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null prevent SSH interactive prompts from hanging
+      const sshOpts = `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10`;
+
+      const cmdMkdir = `sshpass -p '${escapedPass}' ssh ${sshOpts} ${sshPortFlag}${user}@${host} "mkdir -p ${targetDir}"`;
+      const cmdScp = `sshpass -p '${escapedPass}' scp ${sshOpts} ${scpPortFlag}${location} ${user}@${host}:${targetDir}/`;
+      const cmdRm = `rm -f ${location}`;
+
+      const fullCommand = `${cmdMkdir} && ${cmdScp} && ${cmdRm}`;
+
+      console.log(`[SSH Transfer Executing]: sshpass ... to ${user}@${host}:${targetDir}`);
+
+      exec(fullCommand, { timeout: 60000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('Error executing SSH transfer:', error, stderr);
+          res.json({
+            success: false,
+            error: stderr || error.message || 'Falha na conexão SSH/SCP.',
+            stdout,
+            message: `Falha na execução do comando SSH/SCP no servidor: ${stderr || error.message}`
+          });
+        } else {
+          if (backupId) {
+            backupMonitorSingleton.deleteBackupEntry(backupId);
+          }
+          res.json({
+            success: true,
+            message: 'Transferência SSH/SCP concluída com sucesso e arquivo local removido.',
+            stdout,
+            stderr
+          });
+        }
+      });
+    } catch (err) {
+      console.error('Unhandled error in transfer-ssh route:', err);
+      res.status(500).json({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        message: 'Erro interno ao tentar executar a transferência no servidor.'
+      });
+    }
   });
 
   // Alert Rules

@@ -112,9 +112,10 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
     const sshPortFlag = portNum !== 22 ? `-p ${portNum} ` : '';
     const scpPortFlag = portNum !== 22 ? `-P ${portNum} ` : '';
+    const sshOpts = `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null`;
 
-    const cmdMkdir = `sshpass -p '${pass}' ssh ${sshPortFlag}${user}@${host} "mkdir -p ${targetDir}"`;
-    const cmdScp = `sshpass -p '${pass}' scp ${scpPortFlag}${loc} ${user}@${host}:${targetDir}/`;
+    const cmdMkdir = `sshpass -p '${pass}' ssh ${sshOpts} ${sshPortFlag}${user}@${host} "mkdir -p ${targetDir}"`;
+    const cmdScp = `sshpass -p '${pass}' scp ${sshOpts} ${scpPortFlag}${loc} ${user}@${host}:${targetDir}/`;
     const cmdRm = `rm -f ${loc}`;
 
     return `${cmdMkdir} && \\\n${cmdScp} && \\\n${cmdRm}`;
@@ -147,7 +148,14 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
         })
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        throw new Error(`Resposta inesperada do servidor (${res.status}): ${rawText.slice(0, 200)}`);
+      }
+
       if (data.success) {
         setTransferExecuted(true);
         setTransferResult({
