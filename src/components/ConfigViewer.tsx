@@ -229,20 +229,24 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Shared Buffers</span>
-          <span className="text-lg font-bold font-mono text-white">{config.sharedBuffersSetting}</span>
-          <span className="text-[11px] text-slate-400 block mt-1">Memória compartilhada para cache de páginas</span>
+          <span className="text-lg font-bold font-mono text-white">{server?.sharedBuffers || config.sharedBuffersSetting}</span>
+          <span className="text-[11px] text-slate-400 block mt-1">Memória compartilhada de cache ({server?.ramTotalMb ? `Total RAM: ${Math.round(server.ramTotalMb / 1024)} GB` : 'RAM do Servidor'})</span>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
           <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Work Mem / Maint Work Mem</span>
-          <span className="text-lg font-bold font-mono text-white">{config.workMemSetting} / {config.maintenanceWorkMemSetting}</span>
+          <span className="text-lg font-bold font-mono text-white">
+            {server?.workMem || config.workMemSetting} / {server?.maintenanceWorkMem || config.maintenanceWorkMemSetting}
+          </span>
           <span className="text-[11px] text-slate-400 block mt-1">Memória por operação de ordenação e manutenção</span>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Nível de WAL</span>
-          <span className="text-lg font-bold font-mono text-cyan-400 uppercase">{config.walLevelSetting}</span>
-          <span className="text-[11px] text-slate-400 block mt-1">Suporte completo para réplicas e Point-In-Time-Recovery</span>
+          <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Effective Cache Size / WAL</span>
+          <span className="text-lg font-bold font-mono text-cyan-400 uppercase">
+            {server?.effectiveCacheSize || config.effectiveCacheSizeSetting} ({config.walLevelSetting})
+          </span>
+          <span className="text-[11px] text-slate-400 block mt-1">Estimativa de cache em disco e nível de WAL</span>
         </div>
       </div>
     </div>

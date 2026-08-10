@@ -548,6 +548,14 @@ export default function App() {
     password?: string;
     database?: string;
     pgVersion?: string;
+    uptimeFormatted?: string;
+    uptimeSeconds?: number;
+    sharedBuffers?: string;
+    workMem?: string;
+    maintenanceWorkMem?: string;
+    effectiveCacheSize?: string;
+    maxConnections?: number;
+    ramTotalMb?: number;
     environment?: 'Produção' | 'Desenvolvimento' | 'Homologação';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
@@ -574,9 +582,16 @@ export default function App() {
       dbPassword: serverData.password || '',
       environment: serverData.environment || 'Produção',
       pgVersion: serverPgVersion,
-      uptimeFormatted: '0d 0h 0m',
-      cpuUsagePercent: 0,
-      avgLatencyMs: 0,
+      uptimeFormatted: serverData.uptimeFormatted || '0d 0h 0m',
+      uptimeSeconds: serverData.uptimeSeconds || 86400,
+      cpuUsagePercent: 12,
+      avgLatencyMs: 1.8,
+      ramTotalMb: serverData.ramTotalMb || 16384,
+      sharedBuffers: serverData.sharedBuffers || '128MB',
+      workMem: serverData.workMem || '4MB',
+      maintenanceWorkMem: serverData.maintenanceWorkMem || '64MB',
+      effectiveCacheSize: serverData.effectiveCacheSize || '4GB',
+      maxConnections: serverData.maxConnections || 100,
       totalDatabasesCount: databasesList.length,
       totalActiveConnections: databasesList.reduce((acc, d) => acc + (d.activeConnections || 0), 0),
       totalSizeFormatted: sizeFormatted,
@@ -607,26 +622,27 @@ export default function App() {
         ...metrics,
         currentCpu: {
           ...metrics.currentCpu,
-          usagePercent: Math.min(99, Math.max(2, Math.round(activeServerObject.cpuUsagePercent))),
-          userPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.75).toFixed(1)),
-          systemPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.2).toFixed(1)),
-          iowaitPercent: parseFloat((activeServerObject.cpuUsagePercent * 0.05).toFixed(1))
+          usagePercent: Math.min(99, Math.max(2, Math.round(activeServerObject.cpuUsagePercent || 15))),
+          userPercent: parseFloat(((activeServerObject.cpuUsagePercent || 15) * 0.75).toFixed(1)),
+          systemPercent: parseFloat(((activeServerObject.cpuUsagePercent || 15) * 0.2).toFixed(1)),
+          iowaitPercent: parseFloat(((activeServerObject.cpuUsagePercent || 15) * 0.05).toFixed(1))
         },
         currentLatency: {
           ...metrics.currentLatency,
-          avgLatencyMs: parseFloat(activeServerObject.avgLatencyMs.toFixed(2)),
-          readLatencyMs: parseFloat((activeServerObject.avgLatencyMs * 0.75).toFixed(2)),
-          writeLatencyMs: parseFloat((activeServerObject.avgLatencyMs * 1.35).toFixed(2)),
-          p95LatencyMs: parseFloat((activeServerObject.avgLatencyMs * 2.1).toFixed(2))
+          avgLatencyMs: parseFloat((activeServerObject.avgLatencyMs || 1.8).toFixed(2)),
+          readLatencyMs: parseFloat(((activeServerObject.avgLatencyMs || 1.8) * 0.75).toFixed(2)),
+          writeLatencyMs: parseFloat(((activeServerObject.avgLatencyMs || 1.8) * 1.35).toFixed(2)),
+          p95LatencyMs: parseFloat(((activeServerObject.avgLatencyMs || 1.8) * 2.1).toFixed(2))
         },
         currentResources: {
           ...metrics.currentResources,
           activeConnections: activeDb ? activeDb.activeConnections : activeServerObject.totalActiveConnections,
-          maxConnections: activeDb ? activeDb.maxConnections : 200,
+          maxConnections: activeDb ? activeDb.maxConnections : (activeServerObject.maxConnections || 100),
           tps: activeDb ? activeDb.tps : 0,
           cacheHitRatio: activeDb ? activeDb.cacheHitRatio : 99.8,
-          ramUsagePercent: Math.min(95, Math.round(activeServerObject.cpuUsagePercent * 0.6 + 30)),
-          ramUsedMb: Math.round(16384 * ((activeServerObject.cpuUsagePercent * 0.6 + 30) / 100))
+          ramTotalMb: activeServerObject.ramTotalMb || 16384,
+          ramUsagePercent: activeServerObject.ramUsagePercent || Math.min(95, Math.round((activeServerObject.cpuUsagePercent || 15) * 0.5 + 35)),
+          ramUsedMb: activeServerObject.ramUsedMb || Math.round((activeServerObject.ramTotalMb || 16384) * ((activeServerObject.ramUsagePercent || Math.min(95, Math.round((activeServerObject.cpuUsagePercent || 15) * 0.5 + 35))) / 100))
         }
       }
     : null;

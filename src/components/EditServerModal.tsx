@@ -69,7 +69,16 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
           server.databases = data.databases;
           server.totalDatabasesCount = data.databases.length;
         }
-        setQueryMessage(`Consulta efetuada! Versão via SELECT version(): ${data.pgVersion}. ${data.databases?.length || 0} banco(s) identificados.`);
+        if (data.uptimeFormatted) server.uptimeFormatted = data.uptimeFormatted;
+        if (data.uptimeSeconds) server.uptimeSeconds = data.uptimeSeconds;
+        if (data.sharedBuffers) server.sharedBuffers = data.sharedBuffers;
+        if (data.workMem) server.workMem = data.workMem;
+        if (data.maintenanceWorkMem) server.maintenanceWorkMem = data.maintenanceWorkMem;
+        if (data.effectiveCacheSize) server.effectiveCacheSize = data.effectiveCacheSize;
+        if (data.maxConnections) server.maxConnections = data.maxConnections;
+        if (data.ramTotalMb) server.ramTotalMb = data.ramTotalMb;
+
+        setQueryMessage(`Consulta efetuada! Versão: ${data.pgVersion}. Uptime: ${data.uptimeFormatted || 'OK'}. Shared Buffers: ${data.sharedBuffers || '128MB'}.`);
       } else {
         setQueryMessage(`Servidor consultado via SQL. Mantido ${server.databases.length} bancos identificados.`);
       }

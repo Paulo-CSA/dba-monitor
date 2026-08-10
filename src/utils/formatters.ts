@@ -22,6 +22,54 @@ export function formatDurationSeconds(seconds: number): string {
   return `${hours}h ${remMins}m ${secs}s`;
 }
 
+export function formatUptimeSeconds(seconds: number): string {
+  if (!seconds || seconds <= 0 || isNaN(seconds)) return '0d 0h 0m';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+  return `${mins}m ${secs}s`;
+}
+
+export function parsePgSettingMemory(settingStr: string, unit: string | null): { bytes: number; formatted: string; megabytes: number } {
+  const val = parseFloat(settingStr) || 0;
+  let bytes = val;
+  const unitLower = (unit || '').toLowerCase();
+
+  if (unitLower === '8kb') {
+    bytes = val * 8192;
+  } else if (unitLower === 'kb') {
+    bytes = val * 1024;
+  } else if (unitLower === 'mb') {
+    bytes = val * 1024 * 1024;
+  } else if (unitLower === 'gb') {
+    bytes = val * 1024 * 1024 * 1024;
+  } else if (unitLower === 'tb') {
+    bytes = val * 1024 * 1024 * 1024 * 1024;
+  } else if (!unit) {
+    // Check if string contains unit e.g. "128MB", "4GB"
+    const match = settingStr.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
+    if (match) {
+      const num = parseFloat(match[1]) || 0;
+      const u = (match[2] || '').toLowerCase();
+      if (u === 'gb' || u === 'g') bytes = num * 1024 * 1024 * 1024;
+      else if (u === 'mb' || u === 'm') bytes = num * 1024 * 1024;
+      else if (u === 'kb' || u === 'k') bytes = num * 1024;
+      else if (u === '8kb') bytes = num * 8192;
+      else bytes = num;
+    }
+  }
+
+  const megabytes = Math.round(bytes / (1024 * 1024));
+  return {
+    bytes,
+    megabytes,
+    formatted: formatBytes(bytes)
+  };
+}
+
 export function formatDateTime(isoString: string): string {
   if (!isoString) return '-';
   try {

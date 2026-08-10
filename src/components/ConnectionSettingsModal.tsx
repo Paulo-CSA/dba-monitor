@@ -13,6 +13,14 @@ interface ConnectionSettingsModalProps {
     password?: string;
     database?: string;
     pgVersion?: string;
+    uptimeFormatted?: string;
+    uptimeSeconds?: number;
+    sharedBuffers?: string;
+    workMem?: string;
+    maintenanceWorkMem?: string;
+    effectiveCacheSize?: string;
+    maxConnections?: number;
+    ramTotalMb?: number;
     environment?: 'Produção' | 'Desenvolvimento' | 'Homologação';
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
@@ -36,6 +44,14 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     success: boolean;
     message: string;
     pgVersion?: string;
+    uptimeFormatted?: string;
+    uptimeSeconds?: number;
+    sharedBuffers?: string;
+    workMem?: string;
+    maintenanceWorkMem?: string;
+    effectiveCacheSize?: string;
+    maxConnections?: number;
+    ramTotalMb?: number;
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
     liveFileLocations?: FileLocationSetting[];
@@ -63,15 +79,46 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         const detectedDbs: DatabaseInfo[] = data.databases || [];
         const versionStr = data.pgVersion || 'PostgreSQL';
         const fileLocs: FileLocationSetting[] = data.sysConfig?.fileLocations || [];
+        const uptimeFormatted = data.uptimeFormatted || '0d 0h 0m';
+        const uptimeSeconds = data.uptimeSeconds || 86400;
+        const sharedBuffers = data.sharedBuffers || data.sysConfig?.sharedBuffersSetting || '128MB';
+        const workMem = data.workMem || data.sysConfig?.workMemSetting || '4MB';
+        const maintenanceWorkMem = data.maintenanceWorkMem || data.sysConfig?.maintenanceWorkMemSetting || '64MB';
+        const effectiveCacheSize = data.effectiveCacheSize || data.sysConfig?.effectiveCacheSizeSetting || '4GB';
+        const maxConnections = data.maxConnections || data.sysConfig?.maxConnectionsSetting || 100;
+        const ramTotalMb = data.ramTotalMb || 16384;
+
         setTestStatus({
           success: true,
-          message: `Conexão efetuada com sucesso! Versão obtida via SELECT version(): ${versionStr}. ${detectedDbs.length} banco(s) retornado(s) via SELECT datname FROM pg_database. ${fileLocs.length} arquivo(s) obtido(s) via SELECT name, setting FROM pg_settings WHERE category = 'File Locations'.`,
+          message: `Conexão efetuada com sucesso! Versão: ${versionStr}. Uptime: ${uptimeFormatted}. ${detectedDbs.length} banco(s) identificados.`,
           pgVersion: versionStr,
+          uptimeFormatted,
+          uptimeSeconds,
+          sharedBuffers,
+          workMem,
+          maintenanceWorkMem,
+          effectiveCacheSize,
+          maxConnections,
+          ramTotalMb,
           liveDatabases: detectedDbs,
           liveQueries: data.stuckQueries,
           liveFileLocations: fileLocs
         });
-        return { success: true, pgVersion: versionStr, databases: detectedDbs, queries: data.stuckQueries, fileLocations: fileLocs };
+        return {
+          success: true,
+          pgVersion: versionStr,
+          uptimeFormatted,
+          uptimeSeconds,
+          sharedBuffers,
+          workMem,
+          maintenanceWorkMem,
+          effectiveCacheSize,
+          maxConnections,
+          ramTotalMb,
+          databases: detectedDbs,
+          queries: data.stuckQueries,
+          fileLocations: fileLocs
+        };
       } else {
         const errMsg = data.message || data.error || 'Não foi possível conectar ao servidor PostgreSQL informado. Verifique Host, Porta e Credenciais.';
         setTestStatus({
@@ -102,6 +149,14 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     let databases = testStatus?.liveDatabases;
     let queries = testStatus?.liveQueries;
     let fileLocations = testStatus?.liveFileLocations;
+    let uptimeFormatted = testStatus?.uptimeFormatted;
+    let uptimeSeconds = testStatus?.uptimeSeconds;
+    let sharedBuffers = testStatus?.sharedBuffers;
+    let workMem = testStatus?.workMem;
+    let maintenanceWorkMem = testStatus?.maintenanceWorkMem;
+    let effectiveCacheSize = testStatus?.effectiveCacheSize;
+    let maxConnections = testStatus?.maxConnections;
+    let ramTotalMb = testStatus?.ramTotalMb;
 
     if (!testStatus || (!databases && !testStatus.success)) {
       const res = await performAutoQuery();
@@ -112,6 +167,14 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       databases = res.databases;
       queries = res.queries;
       fileLocations = res.fileLocations;
+      uptimeFormatted = res.uptimeFormatted;
+      uptimeSeconds = res.uptimeSeconds;
+      sharedBuffers = res.sharedBuffers;
+      workMem = res.workMem;
+      maintenanceWorkMem = res.maintenanceWorkMem;
+      effectiveCacheSize = res.effectiveCacheSize;
+      maxConnections = res.maxConnections;
+      ramTotalMb = res.ramTotalMb;
     }
 
     if (testStatus && !testStatus.success) {
@@ -129,6 +192,14 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         password,
         database: primaryDb,
         pgVersion: versionStr || 'PostgreSQL',
+        uptimeFormatted,
+        uptimeSeconds,
+        sharedBuffers,
+        workMem,
+        maintenanceWorkMem,
+        effectiveCacheSize,
+        maxConnections,
+        ramTotalMb,
         environment,
         liveDatabases: databases || [],
         liveQueries: queries || [],

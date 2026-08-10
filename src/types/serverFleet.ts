@@ -22,8 +22,17 @@ export interface ServerInstance {
   environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;
+  uptimeSeconds?: number;
   cpuUsagePercent: number;
   avgLatencyMs: number;
+  ramTotalMb?: number;
+  ramUsedMb?: number;
+  ramUsagePercent?: number;
+  sharedBuffers?: string;
+  workMem?: string;
+  maintenanceWorkMem?: string;
+  effectiveCacheSize?: string;
+  maxConnections?: number;
   totalDatabasesCount: number;
   totalActiveConnections: number;
   totalSizeFormatted: string;

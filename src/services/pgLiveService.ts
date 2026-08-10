@@ -2,7 +2,7 @@ import pg from 'pg';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
 import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
-import { formatBytes } from '../utils/formatters';
+import { formatBytes, formatUptimeSeconds, parsePgSettingMemory } from '../utils/formatters';
 
 export interface LiveConnectParams {
   host: string;
@@ -18,6 +18,13 @@ export interface LiveConnectResult {
   message: string;
   pgVersion?: string;
   uptimeFormatted?: string;
+  uptimeSeconds?: number;
+  sharedBuffers?: string;
+  workMem?: string;
+  maintenanceWorkMem?: string;
+  effectiveCacheSize?: string;
+  maxConnections?: number;
+  ramTotalMb?: number;
   databases?: DatabaseInfo[];
   stuckQueries?: StuckQuery[];
   sysConfig?: PgSystemConfig;
@@ -88,7 +95,38 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       });
     }
 
-    // 3. Fetch active queries / sessions from pg_stat_activity across all databases
+    // 3. Fetch real database statistics from pg_stat_database (cache hit ratio, connections, tps)
+    try {
+      const statDbRes = await client.query(`
+        SELECT 
+          datname,
+          COALESCE(numbackends, 0) as numbackends,
+          COALESCE(blks_read, 0) as blks_read,
+          COALESCE(blks_hit, 0) as blks_hit,
+          COALESCE(xact_commit, 0) as xact_commit,
+          COALESCE(xact_rollback, 0) as xact_rollback
+        FROM pg_stat_database
+        WHERE datname IS NOT NULL AND datname != '';
+      `);
+
+      for (const statRow of statDbRes.rows) {
+        const targetDb = databases.find((d) => d.datname === statRow.datname);
+        if (targetDb) {
+          const reads = parseFloat(statRow.blks_read) || 0;
+          const hits = parseFloat(statRow.blks_hit) || 0;
+          const totalBlks = reads + hits;
+          const hitRatio = totalBlks > 0 ? parseFloat(((hits / totalBlks) * 100).toFixed(2)) : 99.8;
+
+          targetDb.activeConnections = parseInt(statRow.numbackends, 10) || 0;
+          targetDb.cacheHitRatio = hitRatio;
+          targetDb.tps = Math.round((parseFloat(statRow.xact_commit) || 0) / 3600); // approximate TPS window
+        }
+      }
+    } catch {
+      // Non-fatal if restricted
+    }
+
+    // 4. Fetch active queries / sessions from pg_stat_activity across all databases
     const activityQuery = `
       SELECT 
         pid,
@@ -130,46 +168,105 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
           query_start: new Date().toISOString()
         }));
 
-      // Update activeConnections per database dynamically
+      // Update activeConnections per database if higher from pg_stat_activity
       for (const db of databases) {
-        db.activeConnections = stuckQueries.filter((q) => q.datname === db.datname).length;
+        const actCount = stuckQueries.filter((q) => q.datname === db.datname).length;
+        if (actCount > db.activeConnections) {
+          db.activeConnections = actCount;
+        }
       }
     } catch {
       // Non-fatal if user permissions restricted on pg_stat_activity
     }
 
-    // 4. Fetch pg_settings for configuration
+    // 5. Fetch pg_settings for configuration and memory parameters
     let fileLocations: FileLocationSetting[] = [];
+    let sharedBuffersSetting = '128MB';
+    let workMemSetting = '4MB';
+    let maintenanceWorkMemSetting = '64MB';
+    let effectiveCacheSizeSetting = '4GB';
+    let maxConnectionsSetting = 100;
+    let walLevelSetting = 'replica';
+    let serverEncoding = 'UTF8';
+    let clientEncoding = 'UTF8';
+    let ramTotalMb = 16384;
+
     try {
       const settingsRes = await client.query(`
-        SELECT name, setting, category, short_desc 
+        SELECT name, setting, unit, category, short_desc 
         FROM pg_settings 
-        WHERE category = 'File Locations' OR name IN ('config_file', 'hba_file', 'ident_file', 'data_directory');
+        WHERE category = 'File Locations' 
+           OR name IN (
+             'config_file', 'hba_file', 'ident_file', 'data_directory',
+             'shared_buffers', 'work_mem', 'maintenance_work_mem', 
+             'effective_cache_size', 'max_connections', 'wal_level',
+             'server_encoding', 'client_encoding'
+           );
       `);
-      fileLocations = settingsRes.rows.map((r) => ({
-        name: r.name,
-        setting: r.setting,
-        category: 'File Locations',
-        short_desc: r.short_desc || '',
-        is_writable: false,
-        status: 'valid'
-      }));
+
+      for (const r of settingsRes.rows) {
+        if (r.category === 'File Locations' || ['config_file', 'hba_file', 'ident_file', 'data_directory'].includes(r.name)) {
+          fileLocations.push({
+            name: r.name,
+            setting: r.setting,
+            category: 'File Locations',
+            short_desc: r.short_desc || '',
+            is_writable: false,
+            status: 'valid'
+          });
+        }
+
+        if (r.name === 'shared_buffers') {
+          const parsed = parsePgSettingMemory(r.setting, r.unit);
+          sharedBuffersSetting = parsed.formatted;
+        } else if (r.name === 'work_mem') {
+          const parsed = parsePgSettingMemory(r.setting, r.unit);
+          workMemSetting = parsed.formatted;
+        } else if (r.name === 'maintenance_work_mem') {
+          const parsed = parsePgSettingMemory(r.setting, r.unit);
+          maintenanceWorkMemSetting = parsed.formatted;
+        } else if (r.name === 'effective_cache_size') {
+          const parsed = parsePgSettingMemory(r.setting, r.unit);
+          effectiveCacheSizeSetting = parsed.formatted;
+          if (parsed.megabytes > 0) {
+            ramTotalMb = Math.round(parsed.megabytes / 0.75); // effective_cache_size is usually ~75% of RAM
+          }
+        } else if (r.name === 'max_connections') {
+          maxConnectionsSetting = parseInt(r.setting, 10) || 100;
+          for (const d of databases) {
+            d.maxConnections = maxConnectionsSetting;
+          }
+        } else if (r.name === 'wal_level') {
+          walLevelSetting = r.setting;
+        } else if (r.name === 'server_encoding') {
+          serverEncoding = r.setting;
+        } else if (r.name === 'client_encoding') {
+          clientEncoding = r.setting;
+        }
+      }
     } catch {
       // Default file locations if restricted
     }
 
-    // 5. Uptime using SELECT pg_postmaster_start_time() AS servidor_ligado_desde;
+    // 6. Calculate Uptime strictly using EXTRACT(epoch FROM (now() - pg_postmaster_start_time()))
     let uptimeFormatted = '0d 0h 0m';
+    let uptimeSeconds = 86400;
+
     try {
-      const uptimeRes = await client.query(`SELECT pg_postmaster_start_time() AS servidor_ligado_desde;`);
-      if (uptimeRes.rows[0]?.servidor_ligado_desde) {
+      const uptimeRes = await client.query(`
+        SELECT 
+          EXTRACT(epoch FROM (now() - pg_postmaster_start_time()))::bigint AS uptime_seconds,
+          pg_postmaster_start_time() AS servidor_ligado_desde;
+      `);
+      
+      if (uptimeRes.rows[0]?.uptime_seconds) {
+        uptimeSeconds = Math.max(0, parseInt(uptimeRes.rows[0].uptime_seconds, 10) || 0);
+        uptimeFormatted = formatUptimeSeconds(uptimeSeconds);
+      } else if (uptimeRes.rows[0]?.servidor_ligado_desde) {
         const startTime = new Date(uptimeRes.rows[0].servidor_ligado_desde);
         const diffMs = Date.now() - startTime.getTime();
-        const totalMinutes = Math.floor(Math.max(0, diffMs) / (1000 * 60));
-        const days = Math.floor(totalMinutes / (60 * 24));
-        const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-        const minutes = totalMinutes % 60;
-        uptimeFormatted = `${days}d ${hours}h ${minutes}m`;
+        uptimeSeconds = Math.max(0, Math.floor(diffMs / 1000));
+        uptimeFormatted = formatUptimeSeconds(uptimeSeconds);
       }
     } catch {
       // Fallback
@@ -179,15 +276,15 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
 
     const sysConfig: PgSystemConfig = {
       version: fullVersionStr,
-      uptimeSeconds: 86400,
-      serverEncoding: 'UTF8',
-      clientEncoding: 'UTF8',
-      maxConnectionsSetting: 100,
-      sharedBuffersSetting: '128MB',
-      workMemSetting: '4MB',
-      maintenanceWorkMemSetting: '64MB',
-      effectiveCacheSizeSetting: '4GB',
-      walLevelSetting: 'replica',
+      uptimeSeconds,
+      serverEncoding,
+      clientEncoding,
+      maxConnectionsSetting,
+      sharedBuffersSetting,
+      workMemSetting,
+      maintenanceWorkMemSetting,
+      effectiveCacheSizeSetting,
+      walLevelSetting,
       fileLocations: fileLocations.length > 0 ? fileLocations : [
         {
           name: 'config_file',
@@ -238,6 +335,13 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       message: `Conectado com sucesso ao PostgreSQL! Versão: ${friendlyVersion}`,
       pgVersion: friendlyVersion,
       uptimeFormatted,
+      uptimeSeconds,
+      sharedBuffers: sharedBuffersSetting,
+      workMem: workMemSetting,
+      maintenanceWorkMem: maintenanceWorkMemSetting,
+      effectiveCacheSize: effectiveCacheSizeSetting,
+      maxConnections: maxConnectionsSetting,
+      ramTotalMb,
       databases,
       stuckQueries,
       sysConfig
