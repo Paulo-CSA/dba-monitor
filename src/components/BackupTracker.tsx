@@ -118,7 +118,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const portFlagStr = sshPort && Number(sshPort) !== 22 ? `-p ${sshPort} ` : '';
   const previewCommand = sshActionType === 'pg_dump'
-    ? `sshpass -p '${passSample}' ssh ${portFlagStr}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${sshUser}@${sshHost} "mkdir -p ${folderClean} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${currentDbName} -F p > ${folderClean}/${sampleFileName}"`
+    ? `sshpass -p '${passSample}' ssh ${portFlagStr}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${sshUser}@${sshHost} "mkdir -p ${folderClean} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${currentDbName} -F c > ${folderClean}/${sampleFileName}"`
     : `sshpass -p '${passSample}' ssh ${portFlagStr}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${sshUser}@${sshHost} "mkdir -p ${folderClean}/${sampleFileName} && sudo -u ${dbUser || 'postgres'} pg_basebackup -D ${folderClean}/${sampleFileName} -F p -P"`;
 
   return (

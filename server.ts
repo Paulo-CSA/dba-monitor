@@ -227,7 +227,6 @@ async function startServer() {
         }
         return srv;
       });
-      saveServersToDisk(activeServersStore);
     }
 
     res.json(result);
