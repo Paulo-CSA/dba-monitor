@@ -414,11 +414,14 @@ export default function App() {
     customPath?: string,
     targetServerObj?: ServerInstance,
     targetDbNameParam?: string,
-    targetLocationType: 'local' | 'remote' = 'local',
-    sshUser?: string,
-    sshPassword?: string,
-    sshHost?: string,
-    sshPort?: number
+    sshParams?: {
+      sshUser?: string;
+      sshPassword?: string;
+      sshHost?: string;
+      sshPort?: number;
+      targetFolder?: string;
+      dbUser?: string;
+    }
   ) => {
     setIsTriggeringBackup(true);
     const srv = targetServerObj || activeServerObject;
@@ -436,16 +439,17 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type,
-          location: customPath,
+          location: sshParams?.targetFolder || customPath,
+          targetFolder: sshParams?.targetFolder || customPath,
           serverId: srv?.id,
           serverName: srv?.name || srv?.host,
-          serverHost: srv?.host,
+          serverHost: sshParams?.sshHost || srv?.host,
           databaseName: targetDbName,
-          targetLocationType,
-          sshUser,
-          sshPassword,
-          sshHost: sshHost || srv?.host,
-          sshPort
+          sshUser: sshParams?.sshUser || 'root',
+          sshPassword: sshParams?.sshPassword || '',
+          sshHost: sshParams?.sshHost || srv?.host || '172.16.0.200',
+          sshPort: sshParams?.sshPort || 22,
+          dbUser: sshParams?.dbUser || 'postgres'
         })
       });
 

@@ -278,44 +278,72 @@ async function startServer() {
     res.json(backupData);
   });
 
-  // Trigger manual backup with custom path
+  // Trigger manual backup with SSH execution (sshpass)
   app.post('/api/db/backups/trigger', async (req, res) => {
     const {
       type,
       location,
+      targetFolder,
       serverId,
       serverName,
       serverHost,
-      databaseName,
-      targetLocationType,
-      sshUser,
-      sshPassword,
+      databaseName = 'northwind',
+      sshUser = 'root',
+      sshPassword = '',
       sshHost,
-      sshPort
-    } = req.body;
+      sshPort = 22,
+      dbUser = 'postgres'
+    } = req.body || {};
 
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
+    const host = sshHost || serverHost || '172.16.0.200';
+    const folder = (targetFolder || location || `/backups/postgresql/${serverName || 'SRV-BD'}/${databaseName}`).replace(/\/$/, '');
+    const user = sshUser || 'root';
+    const portNum = Number(sshPort) || 22;
 
-    // Find server in store if available
-    const srvObj = activeServersStore.find((s) => s.id === serverId || s.host === serverHost);
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+    const passEscaped = (sshPassword || '').replace(/'/g, "'\\''");
+    const portFlag = portNum !== 22 ? `-p ${portNum} ` : '';
+    const sshOpts = `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10`;
 
-    const newEntry = await backupMonitorSingleton.triggerManualBackup({
-      type: backupType,
-      customPath: location,
-      serverId,
-      serverName: serverName || (srvObj ? srvObj.name : undefined),
-      serverHost: serverHost || (srvObj ? srvObj.host : undefined),
-      serverPort: srvObj ? srvObj.port : 5432,
-      dbUser: srvObj ? srvObj.dbUser : 'postgres',
-      dbPassword: srvObj ? srvObj.dbPassword : '',
-      databaseName,
-      targetLocationType: targetLocationType === 'remote' ? 'remote' : 'local',
-      sshUser,
-      sshPassword,
-      sshHost: sshHost || serverHost,
-      sshPort: Number(sshPort) || 22
+    let fullCommand = '';
+    let finalLocation = '';
+
+    if (backupType === 'pg_dump') {
+      const fileName = `backup_${databaseName}_${timestamp}.sql`;
+      finalLocation = `${folder}/${fileName}`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder}" && sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "pg_dump -U ${dbUser} ${databaseName} -F p --clean --if-exists" > ${finalLocation}`;
+    } else {
+      const folderName = `basebackup_${databaseName}_${timestamp}`;
+      finalLocation = `${folder}/${folderName}`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${finalLocation}" && sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "pg_basebackup -h localhost -p 5432 -U ${dbUser} -D ${finalLocation} -Fp -P"`;
+    }
+
+    const maskedCmd = fullCommand.replace(passEscaped, '••••••••');
+    console.log(`[Executing SSH Backup]: ${maskedCmd}`);
+
+    exec(fullCommand, { timeout: 120000 }, async (err, stdout, stderr) => {
+      const newEntry = await backupMonitorSingleton.triggerManualBackup({
+        type: backupType,
+        customPath: finalLocation,
+        serverId: serverId || `srv-${host}`,
+        serverName: serverName || host,
+        serverHost: host,
+        serverPort: 5432,
+        dbUser,
+        databaseName,
+        command: maskedCmd
+      });
+
+      res.json({
+        success: true,
+        entry: newEntry,
+        location: finalLocation,
+        command: maskedCmd,
+        stdout,
+        stderr: stderr || (err ? err.message : '')
+      });
     });
-    res.json({ success: true, entry: newEntry });
   });
 
   // View backup file content
