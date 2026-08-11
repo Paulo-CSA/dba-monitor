@@ -279,7 +279,7 @@ async function startServer() {
   });
 
   // Trigger manual backup with custom path
-  app.post('/api/db/backups/trigger', (req, res) => {
+  app.post('/api/db/backups/trigger', async (req, res) => {
     const {
       type,
       location,
@@ -294,18 +294,25 @@ async function startServer() {
       sshPort
     } = req.body;
 
+    const matchedServer = activeServersStore.find(
+      (s) => s.id === serverId || s.host === serverHost
+    );
+
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
-    const newEntry = backupMonitorSingleton.triggerManualBackup({
+    const newEntry = await backupMonitorSingleton.triggerManualBackup({
       type: backupType,
       customPath: location,
       serverId,
-      serverName,
-      serverHost,
+      serverName: serverName || matchedServer?.name,
+      serverHost: serverHost || matchedServer?.host,
+      serverPort: matchedServer?.port || 5432,
+      dbUser: matchedServer?.dbUser || 'postgres',
+      dbPassword: matchedServer?.dbPassword || '',
       databaseName,
       targetLocationType: targetLocationType === 'remote' ? 'remote' : 'local',
       sshUser,
       sshPassword,
-      sshHost: sshHost || serverHost,
+      sshHost: sshHost || serverHost || matchedServer?.host,
       sshPort: Number(sshPort) || 22
     });
     res.json({ success: true, entry: newEntry });
