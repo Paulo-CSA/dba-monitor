@@ -237,6 +237,70 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
           }
         } catch {}
 
+        // Fetch Custom ENUM Types (e.g. mpaa_rating)
+        try {
+          const enumRes = await client.query(`
+            SELECT
+              n.nspname AS schema_name,
+              t.typname AS type_name,
+              string_agg(quote_literal(e.enumlabel), ', ' ORDER BY e.enumsortorder) AS enum_values
+            FROM pg_type t
+            JOIN pg_enum e ON t.oid = e.enumtypid
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+            GROUP BY n.nspname, t.typname;
+          `);
+
+          if (enumRes.rows.length > 0) {
+            sqlDumpParts.push(`\n--\n-- Custom ENUM Types\n--`);
+            for (const en of enumRes.rows) {
+              sqlDumpParts.push(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = '${en.type_name}' AND n.nspname = '${en.schema_name}') THEN
+        CREATE TYPE "${en.schema_name}"."${en.type_name}" AS ENUM (${en.enum_values});
+    END IF;
+END $$;`);
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching custom ENUM types:', e);
+        }
+
+        // Fetch Custom DOMAIN Types (e.g. year, posint)
+        try {
+          const domainRes = await client.query(`
+            SELECT
+              n.nspname AS schema_name,
+              t.typname AS domain_name,
+              pg_catalog.format_type(t.typbasetype, t.typtypmod) AS base_type,
+              (
+                SELECT pg_catalog.pg_get_expr(c.conbin, c.conrelid)
+                FROM pg_catalog.pg_constraint c
+                WHERE c.contypid = t.oid LIMIT 1
+              ) AS check_constraint
+            FROM pg_type t
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE t.typtype = 'd'
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema');
+          `);
+
+          if (domainRes.rows.length > 0) {
+            sqlDumpParts.push(`\n--\n-- Custom DOMAIN Types\n--`);
+            for (const dom of domainRes.rows) {
+              let createDom = `CREATE DOMAIN "${dom.schema_name}"."${dom.domain_name}" AS ${dom.base_type}`;
+              if (dom.check_constraint) {
+                createDom += ` CHECK (${dom.check_constraint})`;
+              }
+              sqlDumpParts.push(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typname = '${dom.domain_name}' AND n.nspname = '${dom.schema_name}') THEN
+        ${createDom};
+    END IF;
+END $$;`);
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching custom DOMAIN types:', e);
+        }
+
         // Fetch Tables
         const tablesRes = await client.query(`
           SELECT table_schema, table_name 
@@ -313,10 +377,41 @@ ALTER TABLE "${schema}"."${table}" OWNER TO ${dbUser};
                 if (typeof val === 'number') return String(val);
                 if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
                 if (val instanceof Date) return `'${val.toISOString()}'`;
-                if (typeof val === 'object') {
-                  return `'${JSON.stringify(val).replace(/'/g, "''")}'::jsonb`;
+
+                // Handle binary bytea columns
+                if (Buffer.isBuffer(val)) {
+                  return `'\\x${val.toString('hex')}'`;
                 }
-                return `'${String(val).replace(/'/g, "''")}'`;
+
+                // Handle PostgreSQL array columns (e.g. text[], varchar[], integer[])
+                if (Array.isArray(val)) {
+                  if (val.length === 0) {
+                    return `ARRAY[]::${c.formatted_type || 'text[]'}`;
+                  }
+                  const items = val.map((item: any) => {
+                    if (item === null || item === undefined) return 'NULL';
+                    if (typeof item === 'number') return String(item);
+                    if (typeof item === 'boolean') return item ? 'TRUE' : 'FALSE';
+                    if (Buffer.isBuffer(item)) return `'\\x${item.toString('hex')}'`;
+                    return `'${String(item).replace(/'/g, "''")}'`;
+                  });
+                  return `ARRAY[${items.join(', ')}]`;
+                }
+
+                // Handle JSON / JSONB objects
+                if (typeof val === 'object') {
+                  const fType = (c.formatted_type || '').toLowerCase();
+                  const jsonStr = JSON.stringify(val).replace(/'/g, "''");
+                  if (fType.includes('jsonb')) {
+                    return `'${jsonStr}'::jsonb`;
+                  } else if (fType.includes('json')) {
+                    return `'${jsonStr}'::json`;
+                  }
+                  return `'${jsonStr}'`;
+                }
+
+                const strVal = String(val).replace(/'/g, "''");
+                return `'${strVal}'`;
               });
               sqlDumpParts.push(`INSERT INTO "${schema}"."${table}" (${colNames}) VALUES (${formattedVals.join(', ')});`);
             }
