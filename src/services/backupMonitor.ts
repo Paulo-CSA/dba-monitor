@@ -200,7 +200,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
     // 3. Format command string for local backup execution
     let command = '';
     if (type === 'pg_dump') {
-      command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F c -f "${requestedLocation}"`;
+      command = `pg_dump -h ${srvHost} -p 5432 -U postgres -d ${dbName} -F p -f "${requestedLocation}"`;
     } else {
       command = `pg_basebackup -h ${srvHost} -p 5432 -U postgres -D "${requestedLocation}"`;
     }
