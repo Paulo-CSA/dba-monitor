@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview, BackupEntry } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Plus, Play, Server, Database, Trash2, Filter, Key, User, Globe, Lock, Terminal, Send, Copy, X, Check } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Plus, Play, Server, Database, Trash2, Filter, Key, User, Globe, Lock, Terminal, Send, Copy, X, Check, Eye, Download, FileText } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -50,8 +50,41 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [isExecutingTransfer, setIsExecutingTransfer] = useState<boolean>(false);
   const [transferResult, setTransferResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
 
+  // State for View Content Modal
+  const [viewContentModalOpen, setViewContentModalOpen] = useState<boolean>(false);
+  const [viewingBackup, setViewingBackup] = useState<BackupEntry | null>(null);
+  const [backupContentText, setBackupContentText] = useState<string>('');
+  const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
+  const [contentCopied, setContentCopied] = useState<boolean>(false);
+
   const currentServerName = server ? (server.name || server.host) : 'Servidor Central';
   const currentDbName = databaseName || 'postgres';
+
+  const handleViewContent = async (bkp: BackupEntry) => {
+    setViewingBackup(bkp);
+    setIsLoadingContent(true);
+    setViewContentModalOpen(true);
+    setBackupContentText('');
+    setContentCopied(false);
+
+    try {
+      const res = await fetch(`/api/db/backups/content?id=${bkp.id}&location=${encodeURIComponent(bkp.location)}`);
+      const data = await res.json();
+      if (data.success && data.content) {
+        setBackupContentText(data.content);
+      } else {
+        setBackupContentText(`-- Erro ao carregar conteúdo do arquivo:\n-- ${data.error || 'Arquivo não encontrado no disco local'}`);
+      }
+    } catch (err) {
+      setBackupContentText(`-- Falha na requisição:\n-- ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoadingContent(false);
+    }
+  };
+
+  const handleDownloadFile = (bkp: BackupEntry) => {
+    window.open(`/api/db/backups/download?id=${bkp.id}&location=${encodeURIComponent(bkp.location)}`, '_blank');
+  };
 
   const srvFolder = currentServerName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const dbFolder = currentDbName.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -469,6 +502,22 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
                         <button
+                          onClick={() => handleViewContent(bkp)}
+                          title="Ver conteúdo completo do arquivo de backup (SQL DDL / Dump)"
+                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-950/60 text-emerald-300 hover:bg-emerald-900/80 border border-emerald-800/60 transition-all cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Ver Dump</span>
+                        </button>
+                        <button
+                          onClick={() => handleDownloadFile(bkp)}
+                          title="Baixar arquivo de backup salvo em disco"
+                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 hover:bg-indigo-900/80 border border-indigo-800/60 transition-all cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Baixar</span>
+                        </button>
+                        <button
                           onClick={() => openTransferModal(bkp)}
                           title="Enviar arquivo de backup via SSH/SCP"
                           className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-950/60 text-cyan-300 hover:bg-cyan-900/80 border border-cyan-800/60 transition-all cursor-pointer"
@@ -671,6 +720,109 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Overlay for Viewing Backup File Content (SQL / BaseBackup Dump) */}
+      {viewContentModalOpen && viewingBackup && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/60">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    Conteúdo do Arquivo de Backup
+                    <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      {viewingBackup.type}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-lg">
+                    {viewingBackup.location}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(backupContentText);
+                    setContentCopied(true);
+                    setTimeout(() => setContentCopied(false), 2000);
+                  }}
+                  disabled={isLoadingContent || !backupContentText}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-800 hover:bg-emerald-900 transition-all cursor-pointer disabled:opacity-50"
+                  title="Copiar todo o SQL para a área de transferência"
+                >
+                  {contentCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{contentCopied ? 'Copiado!' : 'Copiar SQL'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleDownloadFile(viewingBackup)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-300 bg-indigo-950/80 border border-indigo-800 hover:bg-indigo-900 transition-all cursor-pointer"
+                  title="Baixar arquivo diretamente"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar</span>
+                </button>
+
+                <button
+                  onClick={() => setViewContentModalOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 flex-1 overflow-y-auto bg-slate-950 font-mono text-xs">
+              {isLoadingContent ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-3 text-slate-400">
+                  <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Lendo arquivo de backup do disco...</span>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl mb-3 flex items-center justify-between text-[11px] text-slate-300">
+                    <div>
+                      <span className="text-slate-500">Banco: </span>
+                      <strong className="text-cyan-400">{viewingBackup.databaseName || 'postgres'}</strong>
+                      <span className="mx-2 text-slate-700">|</span>
+                      <span className="text-slate-500">Tamanho: </span>
+                      <strong className="text-emerald-400">{viewingBackup.sizeFormatted}</strong>
+                      <span className="mx-2 text-slate-700">|</span>
+                      <span className="text-slate-500">Linhas Totais: </span>
+                      <strong className="text-purple-400">{backupContentText.split('\n').length} linhas</strong>
+                    </div>
+                  </div>
+
+                  <pre className="text-emerald-400 bg-slate-950 p-4 rounded-xl border border-slate-800/80 overflow-x-auto whitespace-pre leading-relaxed text-[11px] select-all">
+                    {backupContentText}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span className="font-mono text-[11px]">
+                {viewingBackup.notes || 'Arquivo salvo no sistema de arquivos do servidor.'}
+              </span>
+              <button
+                onClick={() => setViewContentModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
           </div>
         </div>
       )}

@@ -279,7 +279,7 @@ async function startServer() {
   });
 
   // Trigger manual backup with custom path
-  app.post('/api/db/backups/trigger', (req, res) => {
+  app.post('/api/db/backups/trigger', async (req, res) => {
     const {
       type,
       location,
@@ -295,12 +295,19 @@ async function startServer() {
     } = req.body;
 
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
-    const newEntry = backupMonitorSingleton.triggerManualBackup({
+
+    // Find server in store if available
+    const srvObj = activeServersStore.find((s) => s.id === serverId || s.host === serverHost);
+
+    const newEntry = await backupMonitorSingleton.triggerManualBackup({
       type: backupType,
       customPath: location,
       serverId,
-      serverName,
-      serverHost,
+      serverName: serverName || (srvObj ? srvObj.name : undefined),
+      serverHost: serverHost || (srvObj ? srvObj.host : undefined),
+      serverPort: srvObj ? srvObj.port : 5432,
+      dbUser: srvObj ? srvObj.dbUser : 'postgres',
+      dbPassword: srvObj ? srvObj.dbPassword : '',
       databaseName,
       targetLocationType: targetLocationType === 'remote' ? 'remote' : 'local',
       sshUser,
@@ -309,6 +316,75 @@ async function startServer() {
       sshPort: Number(sshPort) || 22
     });
     res.json({ success: true, entry: newEntry });
+  });
+
+  // View backup file content
+  app.get('/api/db/backups/content', (req, res) => {
+    const { id, location } = req.query;
+    let filePath = String(location || '');
+
+    if (!filePath && id) {
+      const overview = backupMonitorSingleton.getBackupOverview();
+      const entry = overview.recentBackups.find((b) => b.id === id);
+      if (entry) {
+        filePath = entry.location;
+      }
+    }
+
+    if (!filePath) {
+      res.status(400).json({ success: false, error: 'Caminho do arquivo não fornecido.' });
+      return;
+    }
+
+    let localPath = filePath;
+    if (filePath.startsWith('/')) {
+      localPath = path.join(process.cwd(), filePath.slice(1));
+    }
+
+    try {
+      if (fs.existsSync(localPath)) {
+        const content = fs.readFileSync(localPath, 'utf-8');
+        res.json({ success: true, content, location: filePath, filename: path.basename(filePath) });
+        return;
+      } else if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        res.json({ success: true, content, location: filePath, filename: path.basename(filePath) });
+        return;
+      } else {
+        res.status(404).json({ success: false, error: 'Arquivo de backup não encontrado no disco local.' });
+      }
+    } catch (err) {
+      res.status(500).json({ success: false, error: 'Erro ao ler arquivo do disco: ' + (err instanceof Error ? err.message : String(err)) });
+    }
+  });
+
+  // Download backup file
+  app.get('/api/db/backups/download', (req, res) => {
+    const { id, location } = req.query;
+    let filePath = String(location || '');
+
+    if (!filePath && id) {
+      const overview = backupMonitorSingleton.getBackupOverview();
+      const entry = overview.recentBackups.find((b) => b.id === id);
+      if (entry) {
+        filePath = entry.location;
+      }
+    }
+
+    let localPath = filePath;
+    if (filePath.startsWith('/')) {
+      localPath = path.join(process.cwd(), filePath.slice(1));
+    }
+
+    const target = fs.existsSync(localPath) ? localPath : (fs.existsSync(filePath) ? filePath : null);
+
+    if (target) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      res.sendFile(path.resolve(target));
+    } else {
+      res.status(404).send('Arquivo não encontrado no servidor.');
+    }
   });
 
   // Delete individual backup entry log
