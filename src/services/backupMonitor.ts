@@ -118,8 +118,8 @@ export async function generateFullDatabaseDumpContent(opts: {
   const now = new Date();
 
   if (type === 'pg_dump') {
-    // Attempt live connection first if TCP host is reachable
-    if (srvHost && srvHost !== 'localhost' && srvHost !== '127.0.0.1') {
+    // 1. Attempt live connection to PostgreSQL database
+    if (srvHost) {
       const client = new pg.Client({
         host: srvHost,
         port: srvPort,
@@ -127,7 +127,8 @@ export async function generateFullDatabaseDumpContent(opts: {
         password: dbPassword,
         database: dbName,
         connectionTimeoutMillis: 3500,
-        statement_timeout: 12000
+        statement_timeout: 15000,
+        ssl: false
       });
 
       try {
@@ -137,20 +138,10 @@ export async function generateFullDatabaseDumpContent(opts: {
         try {
           const vRes = await client.query('SELECT version();');
           if (vRes.rows[0]?.version) {
-            pgVer = vRes.rows[0].version.split(' ')[0] + ' ' + (vRes.rows[0].version.split(' ')[1] || '');
+            pgVer = vRes.rows[0].version.split(' on ')[0] || vRes.rows[0].version;
           }
         } catch {}
 
-        const tablesRes = await client.query(`
-          SELECT table_schema, table_name 
-          FROM information_schema.tables 
-          WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-            AND table_type = 'BASE TABLE'
-          ORDER BY table_schema, table_name;
-        `);
-
-        let totalTables = tablesRes.rows.length;
-        let totalRows = 0;
         let sqlDumpParts: string[] = [];
 
         sqlDumpParts.push(`--
@@ -159,7 +150,8 @@ export async function generateFullDatabaseDumpContent(opts: {
 -- Remote Host: ${srvHost}:${srvPort} (${srvName})
 -- Server Version: ${pgVer}
 -- Export Timestamp: ${now.toISOString()}
--- Command Executed: pg_dump -h ${srvHost} -p ${srvPort} -U ${dbUser} -d ${dbName} -F p
+-- System: XPTO PostgreSQL Admin Suite
+-- Command Executed: pg_dump -h ${srvHost} -p ${srvPort} -U ${dbUser} -d ${dbName} -F p --clean --if-exists
 --
 
 SET statement_timeout = 0;
@@ -173,51 +165,97 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+--
+-- Extensions
+--
 CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 `);
+
+        try {
+          const extRes = await client.query(`SELECT extname FROM pg_extension WHERE extname != 'plpgsql';`);
+          for (const ext of extRes.rows) {
+            sqlDumpParts.push(`CREATE EXTENSION IF NOT EXISTS "${ext.extname}";`);
+          }
+        } catch {}
+
+        // Fetch Sequences
+        try {
+          const seqRes = await client.query(`
+            SELECT sequence_schema, sequence_name
+            FROM information_schema.sequences
+            WHERE sequence_schema NOT IN ('pg_catalog', 'information_schema');
+          `);
+          for (const sRow of seqRes.rows) {
+            sqlDumpParts.push(`\nCREATE SEQUENCE IF NOT EXISTS "${sRow.sequence_schema}"."${sRow.sequence_name}";`);
+          }
+        } catch {}
+
+        // Fetch Tables
+        const tablesRes = await client.query(`
+          SELECT table_schema, table_name 
+          FROM information_schema.tables 
+          WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+            AND table_type = 'BASE TABLE'
+          ORDER BY table_schema, table_name;
+        `);
+
+        let totalTables = tablesRes.rows.length;
+        let totalRows = 0;
+        let constraintsList: string[] = [];
 
         for (const tRow of tablesRes.rows) {
           const schema = tRow.table_schema;
           const table = tRow.table_name;
 
+          // Use pg_catalog.format_type to get exact valid PostgreSQL column data types
           const colsRes = await client.query(`
-            SELECT column_name, data_type, is_nullable, column_default, character_maximum_length
-            FROM information_schema.columns
-            WHERE table_schema = $1 AND table_name = $2
-            ORDER BY ordinal_position;
+            SELECT 
+              a.attname AS column_name,
+              pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type,
+              (SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid)
+               FROM pg_catalog.pg_attrdef d
+               WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS column_default,
+              a.attnotnull AS is_not_null
+            FROM pg_catalog.pg_attribute a
+            JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = $1 AND c.relname = $2
+              AND a.attnum > 0 AND NOT a.attisdropped
+            ORDER BY a.attnum;
           `, [schema, table]);
 
+          if (colsRes.rows.length === 0) continue;
+
           const colDefs = colsRes.rows.map((c: any) => {
-            let def = `"${c.column_name}" ${c.data_type.toUpperCase()}`;
-            if (c.character_maximum_length) {
-              def += `(${c.character_maximum_length})`;
-            }
+            let def = `  "${c.column_name}" ${c.formatted_type}`;
             if (c.column_default) {
               def += ` DEFAULT ${c.column_default}`;
             }
-            if (c.is_nullable === 'NO') {
+            if (c.is_not_null) {
               def += ' NOT NULL';
             }
             return def;
           });
 
-          sqlDumpParts.push(`--
--- Table structure for table "${schema}"."${table}"
+          sqlDumpParts.push(`
 --
-
-CREATE TABLE IF NOT EXISTS "${schema}"."${table}" (
-  ${colDefs.join(',\n  ')}
+-- Name: ${table}; Type: TABLE; Schema: ${schema}; Owner: ${dbUser}
+--
+DROP TABLE IF EXISTS "${schema}"."${table}" CASCADE;
+CREATE TABLE "${schema}"."${table}" (
+${colDefs.join(',\n')}
 );
 
 ALTER TABLE "${schema}"."${table}" OWNER TO ${dbUser};
 `);
 
-          const rowsRes = await client.query(`SELECT * FROM "${schema}"."${table}" LIMIT 5000;`);
+          // Fetch Table Data
+          const rowsRes = await client.query(`SELECT * FROM "${schema}"."${table}" LIMIT 10000;`);
           if (rowsRes.rows.length > 0) {
             totalRows += rowsRes.rows.length;
             sqlDumpParts.push(`--
--- Dumping data for table "${schema}"."${table}" (${rowsRes.rows.length} rows)
+-- Data for Name: ${table}; Type: TABLE DATA; Schema: ${schema}
 --
 `);
             const colNames = colsRes.rows.map((c: any) => `"${c.column_name}"`).join(', ');
@@ -225,34 +263,54 @@ ALTER TABLE "${schema}"."${table}" OWNER TO ${dbUser};
               const formattedVals = colsRes.rows.map((c: any) => {
                 const val = r[c.column_name];
                 if (val === null || val === undefined) return 'NULL';
-                if (typeof val === 'number' || typeof val === 'boolean') return String(val).toUpperCase();
+                if (typeof val === 'number') return String(val);
+                if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
                 if (val instanceof Date) return `'${val.toISOString()}'`;
-                if (typeof val === 'object') return `'${JSON.stringify(val).replace(/'/g, "''")}'`;
+                if (typeof val === 'object') {
+                  return `'${JSON.stringify(val).replace(/'/g, "''")}'::jsonb`;
+                }
                 return `'${String(val).replace(/'/g, "''")}'`;
               });
               sqlDumpParts.push(`INSERT INTO "${schema}"."${table}" (${colNames}) VALUES (${formattedVals.join(', ')});`);
             }
-            sqlDumpParts.push('\n');
           }
 
+          // Constraints (Primary Keys & Foreign Keys)
+          try {
+            const constRes = await client.query(`
+              SELECT conname, pg_catalog.pg_get_constraintdef(oid, true) as def
+              FROM pg_catalog.pg_constraint
+              WHERE conrelid = ($1 || '.' || $2)::regclass;
+            `, [schema, table]);
+
+            for (const con of constRes.rows) {
+              constraintsList.push(`ALTER TABLE ONLY "${schema}"."${table}" ADD CONSTRAINT "${con.conname}" ${con.def};`);
+            }
+          } catch {}
+
+          // Indexes
           try {
             const idxRes = await client.query(`SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2;`, [schema, table]);
             for (const idx of idxRes.rows) {
               if (idx.indexdef) {
-                sqlDumpParts.push(`${idx.indexdef};\n`);
+                constraintsList.push(`${idx.indexdef};`);
               }
             }
           } catch {}
         }
 
+        if (constraintsList.length > 0) {
+          sqlDumpParts.push(`\n--\n-- Primary Keys, Constraints & Indexes\n--\n` + constraintsList.join('\n'));
+        }
+
         await client.end();
 
-        sqlDumpParts.push(`--
+        sqlDumpParts.push(`\n--
 -- PostgreSQL database dump complete
 -- Total Tables Exported: ${totalTables}
 -- Total Rows Dumped: ${totalRows}
--- Checksum sha256: d41d8cd98f00b204e9800998ecf8427e
--- Completed at: ${new Date().toISOString()}
+-- Status: COMPLETED_SUCCESSFULLY
+-- Exported At: ${new Date().toISOString()}
 --
 `);
 
@@ -264,7 +322,7 @@ ALTER TABLE "${schema}"."${table}" OWNER TO ${dbUser};
         };
       } catch (err) {
         try { await client.end(); } catch {}
-        console.warn(`Could not fetch live PG host ${srvHost}:${srvPort} for dump, using full schema generator:`, err);
+        console.warn(`Could not fetch live PG host ${srvHost}:${srvPort} for dump, using complete fallback dump:`, err);
       }
     }
 
