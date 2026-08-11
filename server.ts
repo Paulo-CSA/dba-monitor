@@ -312,11 +312,11 @@ async function startServer() {
     if (backupType === 'pg_dump') {
       const fileName = `backup_${databaseName}_${timestamp}.sql`;
       finalLocation = `${folder}/${fileName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder}" && sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "pg_dump -U ${dbUser} ${databaseName} -F p --clean --if-exists" > ${finalLocation}`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && pg_dump -U ${dbUser} ${databaseName} -F p --clean --if-exists > ${finalLocation}"`;
     } else {
       const folderName = `basebackup_${databaseName}_${timestamp}`;
       finalLocation = `${folder}/${folderName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${finalLocation}" && sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "pg_basebackup -h localhost -p 5432 -U ${dbUser} -D ${finalLocation} -Fp -P"`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${finalLocation} && pg_basebackup -h localhost -p 5432 -U ${dbUser} -D ${finalLocation} -Fp -P"`;
     }
 
     const maskedCmd = fullCommand.replace(passEscaped, '••••••••');
