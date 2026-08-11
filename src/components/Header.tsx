@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenExportModal: () => void;
   onOpenAlertModal: () => void;
   onOpenConnectionModal: () => void;
+  onManualRefresh?: () => void;
   activeAlertCount: number;
   selectedServerHost?: string;
   selectedDatabaseName?: string;
@@ -28,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExportModal,
   onOpenAlertModal,
   onOpenConnectionModal,
+  onManualRefresh,
   activeAlertCount,
   selectedServerHost = 'pg-prod-us1.internal.cloud',
   selectedDatabaseName = 'production_db'
@@ -75,6 +77,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{isLive ? 'Ao Vivo' : 'Pausado'}</span>
             </button>
 
+            {/* Manual Refresh Button */}
+            {onManualRefresh && (
+              <button
+                onClick={onManualRefresh}
+                className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition-colors flex items-center justify-center"
+                title="Sincronizar e Atualizar Bancos Agora"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            )}
+
             {/* Refresh Interval Selector */}
             <select
               value={refreshIntervalMs}
@@ -82,6 +95,9 @@ export const Header: React.FC<HeaderProps> = ({
               className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
             >
               <option value={1000}>Atualizar 1s</option>
+              <option value={3000}>Atualizar 3s</option>
+              <option value={5000}>Atualizar 5s</option>
+              <option value={10000}>Atualizar 10s</option>
               <option value={30000}>Atualizar 30s</option>
               <option value={60000}>Atualizar 1min</option>
               <option value={300000}>Atualizar 5min</option>

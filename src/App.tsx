@@ -790,6 +790,7 @@ export default function App() {
         onOpenExportModal={() => setShowExportModal(true)}
         onOpenAlertModal={() => setShowAlertModal(true)}
         onOpenConnectionModal={() => setShowConnectionModal(true)}
+        onManualRefresh={pollAllFleetServers}
         activeAlertCount={activeAlerts.length}
         selectedServerHost={activeServerObject ? activeServerObject.host : 'Nenhum servidor'}
         selectedDatabaseName={activeDb ? activeDb.datname : 'Nenhum banco'}

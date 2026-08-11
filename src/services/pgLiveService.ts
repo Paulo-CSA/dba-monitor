@@ -368,78 +368,70 @@ export async function fetchLiveConnectionsForDb(params: {
   dbUser?: string;
   dbPassword?: string;
   database?: string;
-}): Promise<{ success: boolean; queries: StuckQuery[]; count: number; message?: string }> {
+}): Promise<{
+  success: boolean;
+  queries: StuckQuery[];
+  count: number;
+  databases?: DatabaseInfo[];
+  pgVersion?: string;
+  uptimeFormatted?: string;
+  uptimeSeconds?: number;
+  sharedBuffers?: string;
+  workMem?: string;
+  maintenanceWorkMem?: string;
+  effectiveCacheSize?: string;
+  maxConnections?: number;
+  ramTotalMb?: number;
+  message?: string;
+}> {
   if (!params.host || params.host === '127.0.0.1' || params.host === 'localhost') {
     return { success: false, queries: [], count: 0, message: 'Host local sem conexão TCP remota' };
   }
 
-  const client = new pg.Client({
+  const targetDb = params.database || 'postgres';
+  let liveData = await testAndFetchLivePgData({
     host: params.host,
     port: params.port || 5432,
-    user: params.dbUser || 'postgres',
-    password: params.dbPassword || '',
-    database: params.database || 'postgres',
-    connectionTimeoutMillis: 3500,
-    statement_timeout: 4000
+    dbUser: params.dbUser || 'postgres',
+    dbPassword: params.dbPassword || '',
+    database: targetDb
   });
 
-  try {
-    await client.connect();
-    const dbFilter = params.database ? params.database.replace(/'/g, "''") : '';
-    const activityQuery = `
-      SELECT 
-        pid,
-        usename,
-        datname,
-        COALESCE(client_addr::text, '${params.host}') as client_addr,
-        COALESCE(application_name, 'PostgreSQL Client') as application_name,
-        state,
-        query,
-        ROUND(COALESCE(EXTRACT(epoch FROM (now() - query_start)), 0)::numeric, 1) as duration_seconds,
-        wait_event_type,
-        wait_event
-      FROM pg_stat_activity
-      WHERE pid != pg_backend_pid()
-        AND datname IS NOT NULL
-        AND datname != ''
-        ${dbFilter ? `AND datname = '${dbFilter}'` : ''}
-        AND query NOT LIKE '%pg_stat_activity%'
-      ORDER BY duration_seconds DESC
-      LIMIT 100;
-    `;
+  // If connection failed (e.g., target database was dropped), retry with 'postgres' default database
+  if (!liveData.success && targetDb !== 'postgres') {
+    liveData = await testAndFetchLivePgData({
+      host: params.host,
+      port: params.port || 5432,
+      dbUser: params.dbUser || 'postgres',
+      dbPassword: params.dbPassword || '',
+      database: 'postgres'
+    });
+  }
 
-    const res = await client.query(activityQuery);
-    await client.end();
-
-    const queries: StuckQuery[] = res.rows
-      .filter((r) => r.datname && r.datname.trim() !== '')
-      .map((r) => ({
-        pid: Number(r.pid),
-        usename: r.usename || params.dbUser || 'postgres',
-        datname: r.datname,
-        client_addr: r.client_addr,
-        application_name: r.application_name,
-        state: r.state || 'active',
-        query: r.query || 'SELECT 1;',
-        durationSeconds: parseFloat(r.duration_seconds) || 0,
-        wait_event_type: r.wait_event_type || null,
-        wait_event: r.wait_event || null,
-        blocking_pid: null,
-        isStuck: (parseFloat(r.duration_seconds) || 0) > 30,
-        query_start: new Date().toISOString()
-      }));
-
+  if (liveData.success) {
     return {
       success: true,
-      queries,
-      count: queries.length
+      queries: liveData.stuckQueries || [],
+      count: (liveData.stuckQueries || []).length,
+      databases: liveData.databases,
+      pgVersion: liveData.pgVersion,
+      uptimeFormatted: liveData.uptimeFormatted,
+      uptimeSeconds: liveData.uptimeSeconds,
+      sharedBuffers: liveData.sharedBuffers,
+      workMem: liveData.workMem,
+      maintenanceWorkMem: liveData.maintenanceWorkMem,
+      effectiveCacheSize: liveData.effectiveCacheSize,
+      maxConnections: liveData.maxConnections,
+      ramTotalMb: liveData.ramTotalMb,
+      message: liveData.message
     };
-  } catch (err) {
-    try {
-      await client.end();
-    } catch {}
-    const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, queries: [], count: 0, message: msg };
   }
+
+  return {
+    success: false,
+    queries: [],
+    count: 0,
+    message: liveData.message || liveData.error
+  };
 }
 

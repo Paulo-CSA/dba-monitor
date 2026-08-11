@@ -213,6 +213,23 @@ async function startServer() {
       database
     });
 
+    if (result.success && result.databases && serverId) {
+      activeServersStore = activeServersStore.map((srv) => {
+        if (srv.id === serverId) {
+          return {
+            ...srv,
+            databases: result.databases || srv.databases,
+            totalDatabasesCount: result.databases ? result.databases.length : srv.totalDatabasesCount,
+            pgVersion: result.pgVersion || srv.pgVersion,
+            uptimeFormatted: result.uptimeFormatted || srv.uptimeFormatted,
+            uptimeSeconds: result.uptimeSeconds ?? srv.uptimeSeconds
+          };
+        }
+        return srv;
+      });
+      saveServersToDisk(activeServersStore);
+    }
+
     res.json(result);
   });
 
