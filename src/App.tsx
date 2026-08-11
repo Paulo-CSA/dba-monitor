@@ -152,23 +152,36 @@ export default function App() {
     ? activeServerObject.databases.find((d) => d.datname === selectedDatabaseName) || activeServerObject.databases[0]
     : undefined;
 
-  // Keep a ref of fleetServers to prevent stale closures in periodic polling interval
+  // Keep refs to prevent stale closures and infinite re-render loops in polling
   const fleetServersRef = useRef<ServerInstance[]>(fleetServers);
   useEffect(() => {
     fleetServersRef.current = fleetServers;
   }, [fleetServers]);
+
+  const selectedServerIdRef = useRef(selectedServerId);
+  useEffect(() => {
+    selectedServerIdRef.current = selectedServerId;
+  }, [selectedServerId]);
+
+  const selectedDatabaseNameRef = useRef(selectedDatabaseName);
+  useEffect(() => {
+    selectedDatabaseNameRef.current = selectedDatabaseName;
+  }, [selectedDatabaseName]);
 
   // Fetch live active connections, queries and database list for ALL fleet servers
   const pollAllFleetServers = useCallback(async () => {
     const currentServers = fleetServersRef.current;
     if (!currentServers || currentServers.length === 0) return;
 
+    const selServerId = selectedServerIdRef.current;
+    const selDbName = selectedDatabaseNameRef.current;
+
     try {
       const updatedServers = await Promise.all(
         currentServers.map(async (srv) => {
           const targetDb =
-            srv.id === selectedServerId
-              ? (activeDb ? activeDb.datname : selectedDatabaseName || srv.databases[0]?.datname || 'postgres')
+            srv.id === selServerId
+              ? (selDbName || srv.databases[0]?.datname || 'postgres')
               : (srv.databases[0]?.datname || 'postgres');
 
           try {
@@ -200,14 +213,14 @@ export default function App() {
                     : (db.activeConnections || 0)
                 }));
 
-                if (srv.id === activeServerObject?.id) {
+                if (srv.id === selServerId) {
                   if (Array.isArray(data.queries)) {
                     setStuckQueries(data.queries);
                   }
                   // Check if currently selected database was dropped or removed
                   if (Array.isArray(data.databases) && data.databases.length > 0) {
-                    const exists = data.databases.some((d: DatabaseInfo) => d.datname === selectedDatabaseName);
-                    if (!exists && selectedDatabaseName) {
+                    const exists = data.databases.some((d: DatabaseInfo) => d.datname === selDbName);
+                    if (!exists && selDbName) {
                       const fallbackDb = data.databases[0]?.datname || 'postgres';
                       setSelectedDatabaseName(fallbackDb);
                     }
@@ -247,7 +260,7 @@ export default function App() {
     } catch (err) {
       console.error('Error in fleet servers polling:', err);
     }
-  }, [selectedServerId, selectedDatabaseName, activeDb, activeServerObject]);
+  }, []);
 
   // Re-fetch live connections when active server or database changes
   useEffect(() => {
