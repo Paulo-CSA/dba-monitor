@@ -19,6 +19,7 @@ export interface TriggerBackupOptions {
   sshPassword?: string;
   sshHost?: string;
   sshPort?: number;
+  command?: string;
 }
 
 export function resolveBackupPath(
@@ -164,8 +165,8 @@ export async function generateFullDatabaseDumpContent(opts: {
   const now = new Date();
 
   if (type === 'pg_dump') {
-    // 1. Attempt live connection to PostgreSQL database
-    if (srvHost) {
+    // 1. Attempt live connection to PostgreSQL database only if password is provided and host is local/configured
+    if (srvHost && typeof dbPassword === 'string' && dbPassword.trim().length > 0) {
       const client = new pg.Client({
         host: srvHost,
         port: srvPort,
@@ -868,12 +869,14 @@ export class BackupMonitor {
 
     const srvId = opts.serverId || `srv-${srvClean}`;
 
-    // 4. Format command string for local backup execution
-    let command = '';
-    if (type === 'pg_dump') {
-      command = `pg_dump -h ${srvHost} -p ${opts.serverPort || 5432} -U ${opts.dbUser || 'postgres'} -d ${dbName} -F p -f "${requestedLocation}"`;
-    } else {
-      command = `pg_basebackup -h ${srvHost} -p ${opts.serverPort || 5432} -U ${opts.dbUser || 'postgres'} -D "${requestedLocation}"`;
+    // 4. Format command string for backup execution
+    let command = opts.command || '';
+    if (!command) {
+      if (type === 'pg_dump') {
+        command = `pg_dump -h ${srvHost} -p ${opts.serverPort || 5432} -U ${opts.dbUser || 'postgres'} -d ${dbName} -F c -f "${requestedLocation}"`;
+      } else {
+        command = `pg_basebackup -h ${srvHost} -p ${opts.serverPort || 5432} -U ${opts.dbUser || 'postgres'} -D "${requestedLocation}"`;
+      }
     }
 
     const notes = savedOnDisk 
