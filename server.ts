@@ -17,7 +17,6 @@ import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
 
-// Solução C: Estado mantido exclusivamente na memória RAM (In-Memory)
 function loadServersFromDisk(): ServerInstance[] {
   try {
     if (fs.existsSync(SERVERS_PERSISTENCE_FILE)) {
@@ -28,14 +27,21 @@ function loadServersFromDisk(): ServerInstance[] {
       }
     }
   } catch (err) {
-    console.warn('In-memory state fallback to mockServerFleet:', err);
+    console.error('Error loading servers.json:', err);
   }
-  return [...mockServerFleet];
+  return mockServerFleet;
 }
 
 function saveServersToDisk(servers: ServerInstance[]) {
-  // Solução C: Mantém o estado dos servidores e logs diretamente na memória RAM
-  // do processo Node.js (activeServersStore / backupMonitorSingleton) sem gravar em disco.
+  try {
+    const dir = path.dirname(SERVERS_PERSISTENCE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SERVERS_PERSISTENCE_FILE, JSON.stringify(servers, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving servers.json:', err);
+  }
 }
 
 let activeServersStore: ServerInstance[] = loadServersFromDisk();
