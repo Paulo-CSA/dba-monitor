@@ -312,7 +312,7 @@ async function startServer() {
     if (backupType === 'pg_dump') {
       const fileName = `backup_${databaseName}_${timestamp}.sql`;
       finalLocation = `${folder}/${fileName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F c > ${finalLocation}"`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F p > ${finalLocation}"`;
     } else {
       const folderName = `basebackup_${databaseName}_${timestamp}`;
       finalLocation = `${folder}/${folderName}`;
@@ -322,26 +322,47 @@ async function startServer() {
     const maskedCmd = fullCommand.replace(passEscaped, '••••••••');
     console.log(`[Executing SSH Backup]: ${maskedCmd}`);
 
-    exec(fullCommand, { timeout: 120000 }, async (err, stdout, stderr) => {
-      const newEntry = await backupMonitorSingleton.triggerManualBackup({
-        type: backupType,
-        customPath: finalLocation,
-        serverId: serverId || `srv-${host}`,
-        serverName: serverName || host,
-        serverHost: host,
-        serverPort: 5432,
-        dbUser,
-        databaseName,
-        command: maskedCmd
-      });
+    exec(fullCommand, { timeout: 180000 }, async (err, stdout, stderr) => {
+      if (err) {
+        console.error(`[SSH Backup Failed]:`, stderr || err.message);
+        res.status(500).json({
+          success: false,
+          error: `Erro ao executar backup remoto via SSH em ${host}: ${stderr || err.message}`,
+          command: maskedCmd
+        });
+        return;
+      }
 
-      res.json({
-        success: true,
-        entry: newEntry,
-        location: finalLocation,
-        command: maskedCmd,
-        stdout,
-        stderr: stderr || (err ? err.message : '')
+      // Query size of the file/folder created on remote host via SSH
+      const sizeCmd = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "stat -c%s '${finalLocation}' 2>/dev/null || du -sb '${finalLocation}' 2>/dev/null | cut -f1"`;
+      exec(sizeCmd, { timeout: 15000 }, async (_, sizeStdout) => {
+        let remoteSizeBytes = 0;
+        const parsedSize = parseInt((sizeStdout || '').trim(), 10);
+        if (!isNaN(parsedSize) && parsedSize > 0) {
+          remoteSizeBytes = parsedSize;
+        }
+
+        const newEntry = await backupMonitorSingleton.triggerManualBackup({
+          type: backupType,
+          customPath: finalLocation,
+          serverId: serverId || `srv-${host}`,
+          serverName: serverName || host,
+          serverHost: host,
+          serverPort: 5432,
+          dbUser,
+          databaseName,
+          command: maskedCmd,
+          fileSizeBytes: remoteSizeBytes
+        });
+
+        res.json({
+          success: true,
+          entry: newEntry,
+          location: finalLocation,
+          command: maskedCmd,
+          stdout,
+          stderr: stderr || ''
+        });
       });
     });
   });
