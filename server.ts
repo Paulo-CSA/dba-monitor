@@ -312,7 +312,7 @@ async function startServer() {
     if (backupType === 'pg_dump') {
       const fileName = `backup_${databaseName}_${timestamp}.sql`;
       finalLocation = `${folder}/${fileName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F c > ${finalLocation}"`;
+      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F p > ${finalLocation}"`;
     } else {
       const folderName = `basebackup_${databaseName}_${timestamp}`;
       finalLocation = `${folder}/${folderName}`;
