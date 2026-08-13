@@ -31,7 +31,7 @@ import { exportToPDF } from './utils/pdfExporter';
 import { analyzeQueryWithAI } from './services/aiDiagnosticService';
 import { formatMs, formatBytes, formatUptimeSeconds } from './utils/formatters';
 
-import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus } from 'lucide-react';
+import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus, Database } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
