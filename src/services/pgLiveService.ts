@@ -169,7 +169,9 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       `);
 
       for (const statRow of statDbRes.rows) {
-        const targetDb = databases.find((d) => d.datname === statRow.datname);
+        const targetDb = databases.find(
+          (d) => d.datname.toLowerCase() === (statRow.datname || '').toLowerCase()
+        );
         if (targetDb) {
           const reads = parseFloat(statRow.blks_read) || 0;
           const hits = parseFloat(statRow.blks_hit) || 0;
@@ -208,7 +210,41 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
     `;
     let stuckQueries: StuckQuery[] = [];
     try {
-      const actRes = await client.query(activityQuery);
+      let actRes;
+      try {
+        actRes = await client.query(activityQuery);
+      } catch {
+        // Fallback for legacy PostgreSQL versions (e.g., PostgreSQL 8.x / 9.0 / 9.1) where columns differ:
+        // - procpid instead of pid
+        // - current_query instead of query
+        // - state, application_name, wait_event_type do not exist
+        const legacyActivityQuery = `
+          SELECT 
+            procpid as pid,
+            usename,
+            datname,
+            COALESCE(client_addr::text, '127.0.0.1') as client_addr,
+            'PostgreSQL Client' as application_name,
+            CASE 
+              WHEN current_query = '<idle>' THEN 'idle'
+              WHEN current_query LIKE '<idle%' THEN 'idle'
+              ELSE 'active'
+            END as state,
+            current_query as query,
+            ROUND(COALESCE(EXTRACT(epoch FROM (now() - query_start)), 0)::numeric, 1) as duration_seconds,
+            NULL as wait_event_type,
+            NULL as wait_event
+          FROM pg_stat_activity
+          WHERE procpid != pg_backend_pid()
+            AND datname IS NOT NULL
+            AND datname != ''
+            AND current_query NOT LIKE '%pg_stat_activity%'
+          ORDER BY duration_seconds DESC
+          LIMIT 100;
+        `;
+        actRes = await client.query(legacyActivityQuery);
+      }
+
       stuckQueries = actRes.rows
         .filter((r) => r.datname && r.datname.trim() !== '')
         .map((r) => ({
@@ -229,7 +265,9 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
 
       // Update activeConnections per database if higher from pg_stat_activity
       for (const db of databases) {
-        const actCount = stuckQueries.filter((q) => q.datname === db.datname).length;
+        const actCount = stuckQueries.filter(
+          (q) => q.datname.toLowerCase() === db.datname.toLowerCase()
+        ).length;
         if (actCount > db.activeConnections) {
           db.activeConnections = actCount;
         }

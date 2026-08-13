@@ -220,6 +220,72 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Central de Alertas e Notificações Ativas (Posicionado logo abaixo do Header) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">Central de Alertas e Notificações Ativas</h2>
+              <p className="text-xs text-slate-400">Avisos automáticos de CPU, conexões, queries lentas e locks</p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-amber-950 text-amber-300 border border-amber-800">
+            {activeAlerts.length} Alerta(s) Ativo(s)
+          </span>
+        </div>
+
+        {activeAlerts.length === 0 ? (
+          <div className="p-6 bg-emerald-950/30 border border-emerald-800/60 rounded-xl text-center space-y-2">
+            <ShieldCheck className="w-8 h-8 text-emerald-400 mx-auto" />
+            <h3 className="text-sm font-bold text-emerald-300">Todos os Servidores Saudáveis</h3>
+            <p className="text-xs text-emerald-400/80 font-mono">
+              Nenhuma violação de limite ou alerta crítico detectado no momento. Todos os clusters estão operando dentro dos parâmetros ideais.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {activeAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`p-3.5 rounded-xl border flex items-start space-x-3 transition-all ${
+                  alert.severity === 'critical'
+                    ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
+                    : 'bg-amber-950/40 border-amber-800/80 text-amber-200'
+                }`}
+              >
+                <AlertTriangle
+                  className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                    alert.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs truncate text-white">{alert.ruleName}</span>
+                    <span
+                      className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded font-mono ${
+                        alert.severity === 'critical'
+                          ? 'bg-rose-900 text-rose-200 border border-rose-700'
+                          : 'bg-amber-900 text-amber-200 border border-amber-700'
+                      }`}
+                    >
+                      {alert.severity === 'critical' ? 'CRÍTICO' : 'AVISO'}
+                    </span>
+                  </div>
+                  <p className="text-xs mt-1 font-mono leading-relaxed">{alert.message}</p>
+                  <div className="mt-2 flex items-center justify-between text-[10px] opacity-80 font-mono">
+                    <span>Host: {alert.serverHost}</span>
+                    <span>{alert.triggeredAtFormatted}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Global Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Servidores */}
@@ -623,72 +689,6 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Row 3: Quadro de Alertas Ativos e Notificações de Monitoramento */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Central de Alertas e Notificações Ativas</h2>
-              <p className="text-xs text-slate-400">Avisos automáticos de CPU, conexões, queries lentas e locks</p>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-amber-950 text-amber-300 border border-amber-800">
-            {activeAlerts.length} Alerta(s) Ativo(s)
-          </span>
-        </div>
-
-        {activeAlerts.length === 0 ? (
-          <div className="p-6 bg-emerald-950/30 border border-emerald-800/60 rounded-xl text-center space-y-2">
-            <ShieldCheck className="w-8 h-8 text-emerald-400 mx-auto" />
-            <h3 className="text-sm font-bold text-emerald-300">Todos os Servidores Saudáveis</h3>
-            <p className="text-xs text-emerald-400/80 font-mono">
-              Nenhuma violação de limite ou alerta crítico detectado no momento. Todos os clusters estão operando dentro dos parâmetros ideais.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`p-3.5 rounded-xl border flex items-start space-x-3 transition-all ${
-                  alert.severity === 'critical'
-                    ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
-                    : 'bg-amber-950/40 border-amber-800/80 text-amber-200'
-                }`}
-              >
-                <AlertTriangle
-                  className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                    alert.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs truncate text-white">{alert.ruleName}</span>
-                    <span
-                      className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded font-mono ${
-                        alert.severity === 'critical'
-                          ? 'bg-rose-900 text-rose-200 border border-rose-700'
-                          : 'bg-amber-900 text-amber-200 border border-amber-700'
-                      }`}
-                    >
-                      {alert.severity === 'critical' ? 'CRÍTICO' : 'AVISO'}
-                    </span>
-                  </div>
-                  <p className="text-xs mt-1 font-mono leading-relaxed">{alert.message}</p>
-                  <div className="mt-2 flex items-center justify-between text-[10px] opacity-80 font-mono">
-                    <span>Host: {alert.serverHost}</span>
-                    <span>{alert.triggeredAtFormatted}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

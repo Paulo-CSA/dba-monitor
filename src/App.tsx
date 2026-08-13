@@ -206,12 +206,15 @@ export default function App() {
                   ? data.databases
                   : srv.databases;
 
-                const updatedDatabases = freshDatabases.map((db: DatabaseInfo) => ({
-                  ...db,
-                  activeConnections: Array.isArray(data.queries)
-                    ? data.queries.filter((q: StuckQuery) => q.datname === db.datname).length
-                    : (db.activeConnections || 0)
-                }));
+                const updatedDatabases = freshDatabases.map((db: DatabaseInfo) => {
+                  const qCount = Array.isArray(data.queries)
+                    ? data.queries.filter((q: StuckQuery) => q.datname && q.datname.toLowerCase() === db.datname.toLowerCase()).length
+                    : 0;
+                  return {
+                    ...db,
+                    activeConnections: Math.max(db.activeConnections || 0, qCount)
+                  };
+                });
 
                 if (srv.id === selServerId) {
                   if (Array.isArray(data.queries)) {
@@ -228,6 +231,7 @@ export default function App() {
                 }
 
                 const totalBytesSum = updatedDatabases.reduce((acc, d) => acc + (d.sizeBytes || 0), 0);
+                const sumDbConnections = updatedDatabases.reduce((acc: number, d: DatabaseInfo) => acc + (d.activeConnections || 0), 0);
 
                 return {
                   ...srv,
@@ -244,7 +248,7 @@ export default function App() {
                   stuckQueries: Array.isArray(data.queries) ? data.queries : srv.stuckQueries,
                   databases: updatedDatabases,
                   totalDatabasesCount: updatedDatabases.length,
-                  totalActiveConnections: Array.isArray(data.queries) ? data.queries.length : srv.totalActiveConnections,
+                  totalActiveConnections: sumDbConnections > 0 ? sumDbConnections : (Array.isArray(data.queries) ? data.queries.length : srv.totalActiveConnections),
                   totalSizeFormatted: totalBytesSum > 0 ? formatBytes(totalBytesSum) : srv.totalSizeFormatted
                 };
               }
