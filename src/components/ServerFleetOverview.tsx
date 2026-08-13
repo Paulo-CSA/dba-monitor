@@ -169,27 +169,42 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                   <th className="py-2.5 px-4">Tamanho em Disco</th>
                   <th className="py-2.5 px-4">Conexões Ativas</th>
                   <th className="py-2.5 px-4">Taxa de Transação (TPS)</th>
-                  <th className="py-2.5 px-4">Cache Hit Ratio</th>
+                  <th className="py-2.5 px-4">Qtd. de Tabelas</th>
                   <th className="py-2.5 px-4 text-right">Ação Observabilidade</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-xs font-mono">
                 {activeServer.databases.map((db) => {
                   const isCurrentActiveDb = db.datname === selectedDatabaseName;
+                  const tablesCount = db.tablesCount ?? 0;
+                  const isPostgres = db.datname.toLowerCase() === 'postgres';
+                  const hasZeroTables = tablesCount < 1 && !isPostgres;
+
+                  let rowBgClass = '';
+                  if (hasZeroTables) {
+                    rowBgClass = 'bg-orange-950/70 hover:bg-orange-900/80 border-l-4 border-l-orange-500 text-orange-100';
+                  } else if (isCurrentActiveDb) {
+                    rowBgClass = 'bg-cyan-950/20 hover:bg-slate-800/40';
+                  } else {
+                    rowBgClass = 'hover:bg-slate-800/40';
+                  }
 
                   return (
                     <tr
                       key={db.datname}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        isCurrentActiveDb ? 'bg-cyan-950/20' : ''
-                      }`}
+                      className={`transition-colors ${rowBgClass}`}
                     >
                       <td className="py-3 px-4 font-bold text-white">
                         <div className="flex items-center space-x-2">
-                          <Database className={`w-4 h-4 ${isCurrentActiveDb ? 'text-cyan-400' : 'text-slate-500'}`} />
-                          <span className={isCurrentActiveDb ? 'text-cyan-300 font-extrabold' : 'text-white'}>
+                          <Database className={`w-4 h-4 ${hasZeroTables ? 'text-orange-400' : isCurrentActiveDb ? 'text-cyan-400' : 'text-slate-500'}`} />
+                          <span className={hasZeroTables ? 'text-orange-200 font-bold' : isCurrentActiveDb ? 'text-cyan-300 font-extrabold' : 'text-white'}>
                             {db.datname}
                           </span>
+                          {hasZeroTables && (
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-orange-900 text-orange-200 border border-orange-500 uppercase">
+                              0 Tabelas
+                            </span>
+                          )}
                           {isCurrentActiveDb && (
                             <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
                               Ativo no Dashboard
@@ -210,11 +225,11 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
 
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          db.cacheHitRatio >= 98
-                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                            : 'bg-amber-950 text-amber-400 border border-amber-800'
+                          hasZeroTables
+                            ? 'bg-orange-900 text-orange-200 border border-orange-500'
+                            : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
                         }`}>
-                          {db.cacheHitRatio}%
+                          {tablesCount} {tablesCount === 1 ? 'tabela' : 'tabelas'}
                         </span>
                       </td>
 

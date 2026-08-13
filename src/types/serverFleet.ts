@@ -9,6 +9,7 @@ export interface DatabaseInfo {
   maxConnections: number;
   tps: number;
   cacheHitRatio: number;
+  tablesCount: number;
   owner: string;
   encoding: string;
   status: 'online' | 'degraded' | 'maintenance';

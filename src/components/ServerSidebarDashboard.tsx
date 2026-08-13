@@ -423,55 +423,76 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {activeServer.databases.map((db) => {
                     const isSelectedDb = db.datname === selectedDatabaseName;
+                    const tablesCount = db.tablesCount ?? 0;
+                    const isPostgres = db.datname.toLowerCase() === 'postgres';
+                    const isZeroTables = tablesCount < 1 && !isPostgres;
+
+                    let cardBgClass = '';
+                    if (isZeroTables) {
+                      cardBgClass = isSelectedDb
+                        ? 'bg-orange-900/90 border-orange-400 ring-2 ring-orange-500 shadow-lg shadow-orange-950/80 text-orange-100'
+                        : 'bg-orange-950/90 border-orange-500/80 hover:bg-orange-900 hover:border-orange-400 text-orange-100 shadow-md shadow-orange-950/40';
+                    } else if (isSelectedDb) {
+                      cardBgClass = 'bg-slate-950 border-cyan-500 ring-1 ring-cyan-500 shadow-md';
+                    } else {
+                      cardBgClass = 'bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-950';
+                    }
 
                     return (
                       <div
                         key={db.datname}
                         onClick={() => onSelectDatabase(db.datname)}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
-                          isSelectedDb
-                            ? 'bg-slate-950 border-cyan-500 ring-1 ring-cyan-500 shadow-md'
-                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-950'
-                        }`}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${cardBgClass}`}
                       >
-                        {isSelectedDb && (
-                          <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
-                            Selecionado
-                          </span>
-                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Database className={`w-5 h-5 ${isZeroTables ? 'text-orange-400' : isSelectedDb ? 'text-cyan-400' : 'text-slate-500'}`} />
+                            <div>
+                              <h3 className={`text-sm font-bold ${isZeroTables ? 'text-orange-200' : isSelectedDb ? 'text-cyan-300' : 'text-white'}`}>
+                                {db.datname}
+                              </h3>
+                              <span className={`text-[10px] font-mono ${isZeroTables ? 'text-orange-300/80' : 'text-slate-400'}`}>Owner: {db.owner} | {db.encoding}</span>
+                            </div>
+                          </div>
 
-                        <div className="flex items-center space-x-2">
-                          <Database className={`w-5 h-5 ${isSelectedDb ? 'text-cyan-400' : 'text-slate-500'}`} />
-                          <div>
-                            <h3 className={`text-sm font-bold ${isSelectedDb ? 'text-cyan-300' : 'text-white'}`}>
-                              {db.datname}
-                            </h3>
-                            <span className="text-[10px] text-slate-400 font-mono">Owner: {db.owner} | {db.encoding}</span>
+                          <div className="flex items-center space-x-1">
+                            {isZeroTables && (
+                              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-orange-900/90 text-orange-200 border border-orange-500 uppercase tracking-tight">
+                                Sem Tabelas
+                              </span>
+                            )}
+                            {isSelectedDb && (
+                              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
+                                Selecionado
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         {/* DB Metrics Cards */}
                         <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs font-mono">
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
-                            <span className="text-[10px] text-slate-500 block">Tamanho em Disco</span>
+                          <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/40 border-orange-800/80' : 'bg-slate-900 border-slate-800'}`}>
+                            <span className={`text-[10px] block ${isZeroTables ? 'text-orange-300' : 'text-slate-500'}`}>Tamanho em Disco</span>
                             <span className="font-bold text-emerald-400">{db.sizeFormatted}</span>
                           </div>
 
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
-                            <span className="text-[10px] text-slate-500 block">Conexões Ativas</span>
+                          <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/40 border-orange-800/80' : 'bg-slate-900 border-slate-800'}`}>
+                            <span className={`text-[10px] block ${isZeroTables ? 'text-orange-300' : 'text-slate-500'}`}>Conexões Ativas</span>
                             <span className="font-bold text-cyan-400">
                               {db.activeConnections || 0}
                             </span>
                           </div>
 
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
-                            <span className="text-[10px] text-slate-500 block">Transações/s</span>
+                          <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/40 border-orange-800/80' : 'bg-slate-900 border-slate-800'}`}>
+                            <span className={`text-[10px] block ${isZeroTables ? 'text-orange-300' : 'text-slate-500'}`}>Transações/s</span>
                             <span className="font-bold text-purple-300">{db.tps} tps</span>
                           </div>
 
-                          <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
-                            <span className="text-[10px] text-slate-500 block">Cache Hit Ratio</span>
-                            <span className="font-bold text-cyan-300">{db.cacheHitRatio}%</span>
+                          <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/60 border-orange-600' : 'bg-slate-900 border-slate-800'}`}>
+                            <span className={`text-[10px] block ${isZeroTables ? 'text-orange-200' : 'text-slate-500'}`}>Qtd. de Tabelas</span>
+                            <span className={`font-bold ${isZeroTables ? 'text-orange-300' : 'text-cyan-300'}`}>
+                              {tablesCount} {tablesCount === 1 ? 'tabela' : 'tabelas'}
+                            </span>
                           </div>
                         </div>
 
@@ -482,7 +503,9 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                             setActiveTab('metrics');
                           }}
                           className={`mt-3 w-full py-2 rounded-xl text-xs font-bold transition-all ${
-                            isSelectedDb
+                            isZeroTables
+                              ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-md'
+                              : isSelectedDb
                               ? 'bg-cyan-600 text-white'
                               : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
                           }`}
