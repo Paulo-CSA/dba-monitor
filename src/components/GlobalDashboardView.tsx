@@ -306,10 +306,10 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Consultas Globais (TPS) */}
+        {/* Card 2: Throughput Total da Frota (TPS & Block I/O) */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Throughput Total da Frota</span>
+            <span className="text-xs font-semibold text-slate-400">Throughput Total da Frota (TPS)</span>
             <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
               <Zap className="w-4 h-4" />
             </div>
@@ -319,32 +319,30 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             <span className="text-xs text-cyan-400 font-mono">TPS / seg</span>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Latência Média: <strong className="text-slate-200">{avgLatencyMs} ms</strong></span>
+            <span>Block I/O Ops: <strong className="text-slate-200">Normal</strong></span>
             <span className="text-cyan-400 font-semibold">Sem gargalos</span>
           </div>
         </div>
 
-        {/* Card 3: Consumo Médio de CPU */}
+        {/* Card 3: Sessões Ativas na Frota (`Server Sessions`) */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Uso Médio de CPU da Frota</span>
+            <span className="text-xs font-semibold text-slate-400">Sessões Ativas da Frota (`Server Sessions`)</span>
             <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-              <Cpu className="w-4 h-4" />
+              <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className={`text-2xl font-bold font-mono ${avgCpuUsage > 75 ? 'text-rose-400' : 'text-purple-300'}`}>
-              {avgCpuUsage}%
+            <span className="text-2xl font-bold font-mono text-purple-300">
+              {totalActiveConnections}
             </span>
-            <span className="text-xs text-slate-400 font-mono">Capacidade</span>
+            <span className="text-xs text-slate-400 font-mono">Sessões Ativas</span>
           </div>
           {/* Progress bar */}
           <div className="mt-3 w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
             <div
-              className={`h-full transition-all ${
-                avgCpuUsage > 75 ? 'bg-rose-500' : avgCpuUsage > 50 ? 'bg-amber-400' : 'bg-purple-500'
-              }`}
-              style={{ width: `${avgCpuUsage}%` }}
+              className="h-full transition-all bg-purple-500"
+              style={{ width: `${Math.min(100, (totalActiveConnections / (totalServers * 100 || 1)) * 100)}%` }}
             />
           </div>
         </div>

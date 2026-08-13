@@ -1,6 +1,6 @@
 import React from 'react';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
-import { Server, Database, Activity, Cpu, HardDrive, Clock, CheckCircle2, AlertTriangle, ChevronRight, Globe, User } from 'lucide-react';
+import { Server, Database, Activity, Cpu, HardDrive, Clock, CheckCircle2, AlertTriangle, ChevronRight, Globe, User, Users } from 'lucide-react';
 
 interface SelectedServerContextBarProps {
   servers: ServerInstance[];
@@ -136,10 +136,10 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
           </div>
 
           <div className="flex items-center space-x-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800">
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-slate-400">CPU:</span>
-            <span className={`font-bold ${activeServer.cpuUsagePercent > 80 ? 'text-rose-400' : 'text-cyan-300'}`}>
-              {activeServer.cpuUsagePercent}%
+            <Users className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-slate-400">Sessões:</span>
+            <span className="font-bold text-cyan-300">
+              {activeServer.totalActiveConnections || activeDb?.activeConnections || 0}
             </span>
           </div>
 

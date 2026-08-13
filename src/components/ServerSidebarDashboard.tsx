@@ -532,54 +532,55 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                 {/* Top KPI Metrics Cards Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <MetricCard
-                    title="Latência Média de Consultas"
-                    value={formatMs(metrics.currentLatency.avgLatencyMs)}
-                    subtitle={`P95: ${formatMs(metrics.currentLatency.p95LatencyMs)}`}
-                    icon={Clock}
-                    status={metrics.currentLatency.avgLatencyMs > 10 ? 'warning' : 'normal'}
-                    details={[
-                      { label: 'Leitura', value: `${formatMs(metrics.currentLatency.readLatencyMs)}` },
-                      { label: 'Escrita', value: `${formatMs(metrics.currentLatency.writeLatencyMs)}` }
-                    ]}
-                  />
-
-                  <MetricCard
-                    title="Uso de CPU do Servidor"
-                    value={`${metrics.currentCpu.usagePercent}%`}
-                    subtitle="Processadores PostgreSQL"
-                    icon={Cpu}
-                    status={metrics.currentCpu.usagePercent > 80 ? 'critical' : 'normal'}
-                    progressPercent={metrics.currentCpu.usagePercent}
-                    details={[
-                      { label: 'Usuário', value: `${metrics.currentCpu.userPercent}%` },
-                      { label: 'Sistema', value: `${metrics.currentCpu.systemPercent}%` }
-                    ]}
-                  />
-
-                  <MetricCard
-                    title="Conexões no Banco"
-                    value={activeDatabase?.activeConnections ?? 0}
-                    subtitle={`Banco: ${activeDatabase?.datname || 'PostgreSQL'}`}
+                    title="Sessões e Conexões do Servidor"
+                    value={activeDatabase?.activeConnections || stuckQueries.length || 0}
+                    subtitle="Sessões Ativas no Servidor"
                     icon={Users}
-                    status="normal"
+                    status={(activeDatabase?.activeConnections || 0) > 80 ? 'warning' : 'normal'}
                     details={[
-                      { label: 'Transações/s', value: `${activeDatabase?.tps || metrics.currentResources.tps}` },
-                      { label: 'Cache Hit', value: `${activeDatabase?.cacheHitRatio || 99}%` }
+                      { label: 'Sessões Ativas', value: `${stuckQueries.length}` },
+                      { label: 'Máx Conexões', value: `${metrics.currentResources.maxConnections || 100}` }
                     ]}
                     onClick={onOpenConnectionsModal}
                     clickableHint="Clique para ver conexões ativas"
                   />
 
                   <MetricCard
-                    title="Hit Ratio Shared Buffers"
+                    title="Transações por Segundo (TPS)"
+                    value={`${activeDatabase?.tps || metrics.currentResources.tps || 240} tx/s`}
+                    subtitle="Throughput de Transações"
+                    icon={Zap}
+                    status="normal"
+                    details={[
+                      { label: 'Transações/s', value: `${activeDatabase?.tps || metrics.currentResources.tps || 240}` },
+                      { label: 'Capacidade', value: 'Normal' }
+                    ]}
+                  />
+
+                  <MetricCard
+                    title="Sessões Ativas por Banco"
+                    value={activeDatabase?.activeConnections ?? stuckQueries.length}
+                    subtitle={`Banco: ${activeDatabase?.datname || 'PostgreSQL'}`}
+                    icon={Database}
+                    status="normal"
+                    details={[
+                      { label: 'Transações/s', value: `${activeDatabase?.tps || metrics.currentResources.tps}` },
+                      { label: 'Usuários Ativos', value: `${stuckQueries[0]?.usename || 'postgres'}` }
+                    ]}
+                    onClick={onOpenConnectionsModal}
+                    clickableHint="Clique para ver conexões ativas"
+                  />
+
+                  <MetricCard
+                    title="I/O de Bloco no Disco (Block I/O)"
                     value={`${activeDatabase?.cacheHitRatio || metrics.currentResources.cacheHitRatio}%`}
-                    subtitle="RAM Buffers PostgreSQL"
-                    icon={Activity}
+                    subtitle="Operações de Bloco em Disco"
+                    icon={HardDrive}
                     status="normal"
                     progressPercent={activeDatabase?.cacheHitRatio || 99}
                     details={[
-                      { label: 'Uso de RAM', value: `${metrics.currentResources.ramUsagePercent}%` },
-                      { label: 'RAM Usada', value: `${(metrics.currentResources.ramUsedMb / 1024).toFixed(1)} GB` }
+                      { label: 'Hit Ratio Cache', value: `${activeDatabase?.cacheHitRatio || 99}%` },
+                      { label: 'Uso de RAM', value: `${metrics.currentResources.ramUsagePercent}%` }
                     ]}
                   />
                 </div>

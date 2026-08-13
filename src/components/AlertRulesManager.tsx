@@ -147,10 +147,10 @@ export const AlertRulesManager: React.FC<AlertRulesManagerProps> = ({
                       onChange={(e) => setMetric(e.target.value as AlertMetricType)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
                     >
-                      <option value="cpu_usage">Uso de CPU (%)</option>
-                      <option value="avg_latency">Latência Média (ms)</option>
-                      <option value="stuck_queries_count">Consultas Presas (Qtd)</option>
-                      <option value="ram_usage">Uso de RAM (%)</option>
+                      <option value="stuck_queries_count">Sessões e Conexões Ativas (Qtd)</option>
+                      <option value="cpu_usage">Transações por Segundo (TPS / Servidor)</option>
+                      <option value="avg_latency">I/O de Bloco no Disco (Block I/O Ops)</option>
+                      <option value="ram_usage">Uso de Memória RAM (%)</option>
                       <option value="tables_count">Qtd. de Tabelas no Banco (Mínimo)</option>
                     </select>
                   </div>

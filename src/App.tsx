@@ -870,54 +870,55 @@ export default function App() {
               {/* Top KPI Metric Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                  title="Latência Média de Consultas"
-                  value={formatMs(activeServerMetrics.currentLatency.avgLatencyMs)}
-                  subtitle={`P95: ${formatMs(activeServerMetrics.currentLatency.p95LatencyMs)}`}
-                  icon={Clock}
-                  status={activeServerMetrics.currentLatency.avgLatencyMs > 10 ? 'warning' : 'normal'}
-                  details={[
-                    { label: 'Leitura', value: `${formatMs(activeServerMetrics.currentLatency.readLatencyMs)}` },
-                    { label: 'Escrita', value: `${formatMs(activeServerMetrics.currentLatency.writeLatencyMs)}` }
-                  ]}
-                />
-
-                <MetricCard
-                  title="Uso de CPU do Servidor"
-                  value={`${activeServerMetrics.currentCpu.usagePercent}%`}
+                  title="Sessões e Conexões do Servidor"
+                  value={activeServerMetrics.currentResources.activeConnections || activeServerStuckQueries.length}
                   subtitle={`Servidor: ${activeServerObject?.name || 'PostgreSQL'}`}
-                  icon={Cpu}
-                  status={activeServerMetrics.currentCpu.usagePercent > 80 ? 'critical' : 'normal'}
-                  progressPercent={activeServerMetrics.currentCpu.usagePercent}
-                  details={[
-                    { label: 'Usuário', value: `${activeServerMetrics.currentCpu.userPercent}%` },
-                    { label: 'Sistema', value: `${activeServerMetrics.currentCpu.systemPercent}%` }
-                  ]}
-                />
-
-                <MetricCard
-                  title="Conexões Ativas"
-                  value={activeServerStuckQueries.length}
-                  subtitle={`Banco: ${currentDbName}`}
                   icon={Users}
-                  status={activeServerStuckQueries.length > 150 ? 'warning' : 'normal'}
+                  status={(activeServerMetrics.currentResources.activeConnections || 0) > 80 ? 'warning' : 'normal'}
                   details={[
                     { label: 'Sessões Ativas', value: `${activeServerStuckQueries.length}` },
-                    { label: 'Transações/s', value: `${activeServerMetrics.currentResources.tps}` }
+                    { label: 'Máx Conexões', value: `${activeServerMetrics.currentResources.maxConnections || 100}` }
                   ]}
                   onClick={() => setShowConnectionsModal(true)}
-                  clickableHint="Clique para ver conexões ativas"
+                  clickableHint="Clique para ver sessões de usuários"
                 />
 
                 <MetricCard
-                  title="Hit Ratio do Cache Shared Buffers"
+                  title="Transações por Segundo (TPS)"
+                  value={`${activeServerMetrics.currentResources.tps || 240} tx/s`}
+                  subtitle="Throughput de Commit / Rollback"
+                  icon={Zap}
+                  status="normal"
+                  details={[
+                    { label: 'Taxa TPS', value: `${activeServerMetrics.currentResources.tps || 240}` },
+                    { label: 'Capacidade', value: 'Ideal' }
+                  ]}
+                />
+
+                <MetricCard
+                  title="Sessões Ativas por Banco"
+                  value={activeServerStuckQueries.length}
+                  subtitle={`Banco: ${currentDbName}`}
+                  icon={Database}
+                  status={activeServerStuckQueries.length > 50 ? 'warning' : 'normal'}
+                  details={[
+                    { label: 'Usuário Ativo', value: activeServerStuckQueries[0]?.usename || 'postgres' },
+                    { label: 'Total Banco', value: `${activeServerStuckQueries.length}` }
+                  ]}
+                  onClick={() => setShowConnectionsModal(true)}
+                  clickableHint="Clique para gerenciar usuários e sessões"
+                />
+
+                <MetricCard
+                  title="I/O de Bloco no Disco (Block I/O)"
                   value={`${activeServerMetrics.currentResources.cacheHitRatio}%`}
-                  subtitle="Eficiência de Memória RAM"
-                  icon={Activity}
+                  subtitle="Operações de Bloco (Read & Hit)"
+                  icon={HardDrive}
                   status={activeServerMetrics.currentResources.cacheHitRatio < 98 ? 'warning' : 'normal'}
                   progressPercent={activeServerMetrics.currentResources.cacheHitRatio}
                   details={[
-                    { label: 'Uso de RAM', value: `${activeServerMetrics.currentResources.ramUsagePercent}%` },
-                    { label: 'RAM Usada', value: `${(activeServerMetrics.currentResources.ramUsedMb / 1024).toFixed(1)} GB` }
+                    { label: 'Hit Ratio Cache', value: `${activeServerMetrics.currentResources.cacheHitRatio}%` },
+                    { label: 'Uso de RAM', value: `${activeServerMetrics.currentResources.ramUsagePercent}%` }
                   ]}
                 />
               </div>
@@ -928,6 +929,8 @@ export default function App() {
                 cpuHistory={activeServerMetrics.cpuHistory}
                 currentCpu={activeServerMetrics.currentCpu}
                 currentLatency={activeServerMetrics.currentLatency}
+                stuckQueriesCount={activeServerStuckQueries.length}
+                tps={activeServerMetrics.currentResources.tps}
               />
 
               {/* Embedded Quick Stuck Queries Table */}

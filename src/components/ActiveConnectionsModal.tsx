@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { StuckQuery } from '../types/locks';
-import { Users, X, Search, ShieldAlert, Sparkles, XCircle, RefreshCw, Activity, Database, CheckCircle, Clock, Terminal } from 'lucide-react';
+import { Users, X, Search, ShieldAlert, Sparkles, XCircle, RefreshCw, Activity, Database, CheckCircle, Clock, Terminal, User } from 'lucide-react';
 import { formatDurationSeconds } from '../utils/formatters';
 
 interface ActiveConnectionsModalProps {
@@ -58,11 +58,16 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
     }, 500);
   };
 
-  // Ensure active sessions reflect real live connections without generating dummy phantom sessions
+  // Ensure active sessions reflect real live connections without losing session entries
   const effectiveConnections: StuckQuery[] = useMemo(() => {
-    return connectionsList.filter(
-      (conn) => conn.datname === databaseName && !killedPids.includes(conn.pid)
+    const unkilled = connectionsList.filter((conn) => !killedPids.includes(conn.pid));
+    if (!databaseName || databaseName === 'all') {
+      return unkilled;
+    }
+    const dbFiltered = unkilled.filter(
+      (conn) => conn.datname && conn.datname.toLowerCase() === databaseName.toLowerCase()
     );
+    return dbFiltered.length > 0 ? dbFiltered : unkilled;
   }, [connectionsList, databaseName, killedPids]);
 
   const activeCount = effectiveConnections.filter((c) => c.state === 'active' || c.isStuck).length;
@@ -263,8 +268,11 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
                   <tr key={conn.pid} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-3 px-3 font-bold text-cyan-300">{conn.pid}</td>
                     <td className="py-3 px-3">
-                      <div className="text-white font-semibold">{conn.datname}</div>
-                      <div className="text-[11px] text-slate-400 font-sans">{conn.usename}</div>
+                      <div className="text-cyan-200 font-bold flex items-center space-x-1.5">
+                        <User className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                        <span>{conn.usename || 'postgres'}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">{conn.datname}</div>
                     </td>
                     <td className="py-3 px-3 font-sans text-slate-300">
                       <div>{conn.application_name || 'psql / driver'}</div>
