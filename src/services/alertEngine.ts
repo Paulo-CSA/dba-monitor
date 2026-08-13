@@ -1,5 +1,6 @@
 import { AlertRule, ActiveAlert } from '../types/alerts';
 import { RealtimeMetricsPayload } from '../types/metrics';
+import { ServerInstance } from '../types/serverFleet';
 
 export class AlertEngine {
   private rules: AlertRule[] = [];
@@ -54,6 +55,18 @@ export class AlertEngine {
         enabled: true,
         notifySound: false,
         description: 'Alerta quando o uso de memória do PostgreSQL exceder 85%.'
+      },
+      {
+        id: 'rule-zero-tables',
+        name: 'Banco de Dados Sem Tabelas',
+        metric: 'tables_count',
+        operator: '<',
+        thresholdValue: 1,
+        unit: 'tabelas',
+        severity: 'warning',
+        enabled: true,
+        notifySound: false,
+        description: 'Alerta quando um banco de dados (exceto o sistema postgres) possui menos de 1 tabela.'
       }
     ];
   }
@@ -80,12 +93,45 @@ export class AlertEngine {
     this.rules = this.rules.filter(r => r.id !== id);
   }
 
-  public evaluateMetrics(metrics: RealtimeMetricsPayload, stuckQueriesCount: number): ActiveAlert[] {
+  public evaluateMetrics(
+    metrics: RealtimeMetricsPayload,
+    stuckQueriesCount: number,
+    servers: ServerInstance[] = []
+  ): ActiveAlert[] {
     const newActiveAlerts: ActiveAlert[] = [];
     const now = new Date().toLocaleTimeString();
 
     for (const rule of this.rules) {
       if (!rule.enabled) continue;
+
+      if (rule.metric === 'tables_count') {
+        for (const srv of servers) {
+          if (!srv.databases) continue;
+          for (const db of srv.databases) {
+            if (db.datname.toLowerCase() === 'postgres') continue;
+            const val = db.tablesCount ?? 0;
+            let triggered = false;
+            if (rule.operator === '<' && val < rule.thresholdValue) triggered = true;
+            if (rule.operator === '<=' && val <= rule.thresholdValue) triggered = true;
+            if (rule.operator === '==' && val === rule.thresholdValue) triggered = true;
+
+            if (triggered) {
+              newActiveAlerts.push({
+                id: `alert-${rule.id}-${srv.id}-${db.datname}`,
+                ruleId: rule.id,
+                ruleName: `${rule.name} (${db.datname})`,
+                severity: rule.severity,
+                message: `O banco de dados '${db.datname}' no servidor ${srv.host} possui ${val} tabelas (limite configurado: ${rule.operator} ${rule.thresholdValue} ${rule.unit}).`,
+                currentValue: val,
+                thresholdValue: rule.thresholdValue,
+                triggeredAt: now,
+                acknowledged: false
+              });
+            }
+          }
+        }
+        continue;
+      }
 
       let val = 0;
       if (rule.metric === 'cpu_usage') val = metrics.currentCpu.usagePercent;

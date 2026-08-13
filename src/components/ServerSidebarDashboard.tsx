@@ -456,11 +456,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                           </div>
 
                           <div className="flex items-center space-x-1">
-                            {isZeroTables && (
-                              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-orange-900/90 text-orange-200 border border-orange-500 uppercase tracking-tight">
-                                Sem Tabelas
-                              </span>
-                            )}
                             {isSelectedDb && (
                               <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
                                 Selecionado

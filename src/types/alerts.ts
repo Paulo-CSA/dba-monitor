@@ -5,7 +5,8 @@ export type AlertMetricType =
   | 'stuck_queries_count'
   | 'ram_usage'
   | 'disk_usage'
-  | 'bloat_percentage';
+  | 'bloat_percentage'
+  | 'tables_count';
 
 export type AlertOperator = '>' | '>=' | '<' | '==';
 

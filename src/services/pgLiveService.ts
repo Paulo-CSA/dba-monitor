@@ -58,9 +58,9 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
     let currentDbTablesCount = 0;
     try {
       const tblRes = await client.query(`
-        SELECT count(*)::int as tbl_count 
-        FROM pg_tables 
-        WHERE schemaname NOT IN ('pg_catalog', 'information_schema');
+        SELECT COUNT(*)::int as tbl_count
+        FROM information_schema.tables
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
       `);
       currentDbTablesCount = parseInt(tblRes.rows[0]?.tbl_count, 10) || 0;
     } catch {

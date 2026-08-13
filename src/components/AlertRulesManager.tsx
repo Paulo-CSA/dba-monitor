@@ -30,19 +30,24 @@ export const AlertRulesManager: React.FC<AlertRulesManagerProps> = ({
     if (!name.trim()) return;
 
     let unit = '%';
+    let operator: AlertRule['operator'] = '>';
     if (metric === 'avg_latency') unit = 'ms';
     if (metric === 'stuck_queries_count') unit = 'queries';
+    if (metric === 'tables_count') {
+      unit = 'tabelas';
+      operator = '<';
+    }
 
     onAddRule({
       name,
       metric,
-      operator: '>',
+      operator,
       thresholdValue,
       unit,
       severity,
       enabled: true,
       notifySound: true,
-      description: `Alerta personalizado para ${metric} > ${thresholdValue}${unit}`
+      description: `Alerta personalizado para ${metric} ${operator} ${thresholdValue} ${unit}`
     });
 
     setName('');
@@ -146,6 +151,7 @@ export const AlertRulesManager: React.FC<AlertRulesManagerProps> = ({
                       <option value="avg_latency">Latência Média (ms)</option>
                       <option value="stuck_queries_count">Consultas Presas (Qtd)</option>
                       <option value="ram_usage">Uso de RAM (%)</option>
+                      <option value="tables_count">Qtd. de Tabelas no Banco (Mínimo)</option>
                     </select>
                   </div>
 

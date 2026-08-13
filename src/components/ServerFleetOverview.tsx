@@ -200,11 +200,6 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                           <span className={hasZeroTables ? 'text-orange-200 font-bold' : isCurrentActiveDb ? 'text-cyan-300 font-extrabold' : 'text-white'}>
                             {db.datname}
                           </span>
-                          {hasZeroTables && (
-                            <span className="px-2 py-0.5 rounded text-[10px] bg-orange-900 text-orange-200 border border-orange-500 uppercase">
-                              0 Tabelas
-                            </span>
-                          )}
                           {isCurrentActiveDb && (
                             <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
                               Ativo no Dashboard

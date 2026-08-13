@@ -128,7 +128,8 @@ async function startServer() {
     const data = metricsEngineSingleton.tickNextMetrics();
     const activeAlerts = alertEngineSingleton.evaluateMetrics(
       data,
-      lockAnalyzerSingleton.getLocksAndQueries().stuckQueries.length
+      lockAnalyzerSingleton.getLocksAndQueries().stuckQueries.length,
+      activeServersStore
     );
     res.json({
       metrics: data,
