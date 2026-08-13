@@ -135,15 +135,14 @@ export const StuckQueriesTable: React.FC<StuckQueriesTableProps> = ({
                         <span className="hidden sm:inline">Análise IA</span>
                       </button>
 
-                      {/* Terminate Session Button */}
+                      {/* Terminate Session Button (Disabled) */}
                       <button
-                        onClick={() => onKillPid(q.pid)}
-                        disabled={killingPid === q.pid}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 transition-all cursor-pointer"
-                        title="Executar SELECT pg_terminate_backend(PID)"
+                        disabled={true}
+                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-60"
+                        title="Ação de encerrar PID desativada"
                       >
-                        <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                        <span>{killingPid === q.pid ? 'Encerrando...' : 'Encerrar PID'}</span>
+                        <XCircle className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Encerrar PID (Desativado)</span>
                       </button>
                     </div>
                   </td>

@@ -317,13 +317,12 @@ export const ActiveConnectionsModal: React.FC<ActiveConnectionsModalProps> = ({
                         </button>
 
                         <button
-                          onClick={() => onKillPid(conn.pid)}
-                          disabled={killingPid === conn.pid}
-                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/40 transition-all cursor-pointer"
-                          title="Encerrar Backend PID"
+                          disabled={true}
+                          className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/60 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-60"
+                          title="Ação de encerrar sessão/PID desativada"
                         >
-                          <XCircle className="w-3 h-3 text-rose-400" />
-                          <span>{killingPid === conn.pid ? '...' : 'Encerrar'}</span>
+                          <XCircle className="w-3 h-3 text-slate-500" />
+                          <span>Encerrar (Desativado)</span>
                         </button>
                       </div>
                     </td>
