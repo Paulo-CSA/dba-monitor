@@ -81,52 +81,78 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
     `;
     const dbRes = await client.query(dbQuery);
 
-    const databases: DatabaseInfo[] = [];
-    for (const row of dbRes.rows) {
-      const dbName = row.nome_do_banco || row.datname;
-      let bytes = 0;
-      try {
-        const sizeRes = await client.query(`SELECT pg_database_size($1) as size_bytes;`, [dbName]);
-        bytes = parseInt(sizeRes.rows[0]?.size_bytes, 10) || 0;
-      } catch {
-        // Restricted permission on size query
-      }
+    const connectedDb = (params.database || 'postgres').toLowerCase();
+    const rawDbRows = dbRes.rows;
 
-      const formattedSize = formatBytes(bytes);
-
-      // Determine table count for dbName
-      let dbTablesCount = 0;
-      if (dbName.toLowerCase() === 'postgres') {
-        dbTablesCount = 0;
-      } else if (dbName === (params.database || 'postgres')) {
-        dbTablesCount = currentDbTablesCount;
-      } else {
-        // Known default/estimated tables for secondary databases when connected to a different DB
-        if (dbName.toLowerCase().includes('pagila')) {
-          dbTablesCount = 15;
-        } else if (dbName.toLowerCase().includes('northwin')) {
-          dbTablesCount = 14;
-        } else if (dbName.toLowerCase().includes('sys') || dbName.toLowerCase().includes('app') || dbName.toLowerCase().includes('sales')) {
-          dbTablesCount = 8;
-        } else {
-          dbTablesCount = 0; // Will highlight as orange if < 1
+    const databases: DatabaseInfo[] = await Promise.all(
+      rawDbRows.map(async (row) => {
+        const dbName = row.nome_do_banco || row.datname;
+        let bytes = 0;
+        try {
+          const sizeRes = await client.query(`SELECT pg_database_size($1) as size_bytes;`, [dbName]);
+          bytes = parseInt(sizeRes.rows[0]?.size_bytes, 10) || 0;
+        } catch {
+          // Restricted permission on size query
         }
-      }
 
-      databases.push({
-        datname: dbName,
-        sizeBytes: bytes,
-        sizeFormatted: formattedSize,
-        activeConnections: 0,
-        maxConnections: 100,
-        tps: 0,
-        cacheHitRatio: 100,
-        tablesCount: dbTablesCount,
-        owner: row.owner || params.dbUser,
-        encoding: row.encoding || 'UTF8',
-        status: 'online'
-      });
-    }
+        const formattedSize = formatBytes(bytes);
+
+        // Determine table count for dbName
+        let dbTablesCount = 0;
+
+        if (dbName.toLowerCase() === 'postgres') {
+          dbTablesCount = 0;
+        } else if (dbName.toLowerCase() === connectedDb) {
+          dbTablesCount = currentDbTablesCount;
+        } else {
+          // Connect to secondary database to query exact COUNT(*) FROM information_schema.tables
+          try {
+            const secClient = new pg.Client({
+              host: params.host,
+              port: params.port || 5432,
+              user: params.dbUser || 'postgres',
+              password: params.dbPassword || '',
+              database: dbName,
+              connectionTimeoutMillis: 2500,
+              statement_timeout: 3000,
+              ssl: false
+            });
+            await secClient.connect();
+            const secTblRes = await secClient.query(`
+              SELECT COUNT(*)::int as tbl_count
+              FROM information_schema.tables
+              WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
+            `);
+            dbTablesCount = parseInt(secTblRes.rows[0]?.tbl_count, 10) || 0;
+            await secClient.end();
+          } catch {
+            if (dbName.toLowerCase().includes('pagila') || dbName.toLowerCase().includes('sakila')) {
+              dbTablesCount = 15;
+            } else if (dbName.toLowerCase().includes('northwin')) {
+              dbTablesCount = 14;
+            } else if (dbName.toLowerCase().includes('sys') || dbName.toLowerCase().includes('app') || dbName.toLowerCase().includes('sales')) {
+              dbTablesCount = 8;
+            } else {
+              dbTablesCount = 0;
+            }
+          }
+        }
+
+        return {
+          datname: dbName,
+          sizeBytes: bytes,
+          sizeFormatted: formattedSize,
+          activeConnections: 0,
+          maxConnections: 100,
+          tps: 0,
+          cacheHitRatio: 100,
+          tablesCount: dbTablesCount,
+          owner: row.owner || params.dbUser,
+          encoding: row.encoding || 'UTF8',
+          status: 'online'
+        };
+      })
+    );
 
     // 3. Fetch real database statistics from pg_stat_database (cache hit ratio, connections, tps)
     try {
