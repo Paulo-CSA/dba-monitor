@@ -76,7 +76,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   // Helper to detect server alerts (zero tables, high cpu, warning status, etc.)
   const getServerAlertInfo = (srv: ServerInstance) => {
     const zeroTableDbs = (srv.databases || []).filter(
-      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
+      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && d.datname.toLowerCase() !== 'root' && !d.datname.toLowerCase().startsWith('template')
     );
     const hasZeroTables = zeroTableDbs.length > 0;
     const isHighCpu = srv.cpuUsagePercent > 80;
