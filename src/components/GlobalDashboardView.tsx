@@ -337,9 +337,14 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
 
         {/* Card 3: Sessões Ativas na Frota (`Server Sessions`) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-slate-700 transition-all">
+        <div
+          onClick={onOpenConnectionsModal}
+          className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-purple-500/80 hover:shadow-lg hover:shadow-purple-950/20 transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Sessões Ativas da Frota (`Server Sessions`)</span>
+            <span className="text-xs font-semibold text-slate-400 group-hover:text-purple-300 transition-colors">
+              Sessões Ativas da Frota (`Server Sessions`) &rarr;
+            </span>
             <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
               <Users className="w-4 h-4" />
             </div>

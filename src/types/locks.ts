@@ -12,6 +12,8 @@ export interface StuckQuery {
   blocking_pid: number | null;
   isStuck: boolean;
   query_start: string;
+  serverId?: string;
+  serverName?: string;
 }
 
 export interface ActiveLock {
