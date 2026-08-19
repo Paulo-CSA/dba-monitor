@@ -8,7 +8,7 @@ export type AlertMetricType =
   | 'bloat_percentage'
   | 'tables_count';
 
-export type AlertOperator = '>' | '>=' | '<' | '==';
+export type AlertOperator = '>' | '>=' | '<' | '<=' | '==';
 
 export interface AlertRule {
   id: string;

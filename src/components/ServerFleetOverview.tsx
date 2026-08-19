@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
-import { Server, Database, Eye, ShieldCheck, Cpu, HardDrive, Clock, Search, ExternalLink, ArrowRight, Layers, Lock, CheckCircle2 } from 'lucide-react';
+import { Server, Database, Eye, ShieldCheck, Cpu, HardDrive, Clock, Search, ExternalLink, ArrowRight, Layers, Lock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { formatBytes } from '../utils/formatters';
 
 interface ServerFleetOverviewProps {
@@ -78,60 +78,104 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {filteredServers.map((srv) => {
           const isSelected = srv.id === activeServer.id;
+          const zeroTableDbs = (srv.databases || []).filter(
+            (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
+          );
+          const hasZeroTables = zeroTableDbs.length > 0;
+          const hasAlert = hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
+
+          let cardBgClass = '';
+          if (hasAlert) {
+            cardBgClass = isSelected
+              ? 'bg-orange-900/90 border-orange-400 ring-2 ring-orange-500 shadow-lg shadow-orange-950/80 text-orange-100'
+              : 'bg-orange-950/90 border-orange-500/80 hover:bg-orange-900 hover:border-orange-400 text-orange-100 shadow-md shadow-orange-950/40';
+          } else if (isSelected) {
+            cardBgClass = 'bg-slate-900 border-cyan-500 ring-1 ring-cyan-500 shadow-lg shadow-cyan-950/50';
+          } else {
+            cardBgClass = 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900';
+          }
 
           return (
             <div
               key={srv.id}
               onClick={() => onSelectServer(srv.id)}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
-                isSelected
-                  ? 'bg-slate-900 border-cyan-500 ring-1 ring-cyan-500 shadow-lg shadow-cyan-950/50'
-                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-              }`}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${cardBgClass}`}
             >
               {/* Selected Indicator */}
               {isSelected && (
-                <div className="absolute top-0 right-0 bg-cyan-500 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg uppercase">
+                <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg uppercase ${
+                  hasAlert ? 'bg-orange-500 text-white' : 'bg-cyan-500 text-slate-950'
+                }`}>
                   Servidor Selecionado
                 </div>
               )}
 
               <div className="flex items-start justify-between">
                 <div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
-                    srv.environment === 'Produção' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
-                    srv.environment === 'Desenvolvimento' ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' :
-                    srv.environment === 'Homologação' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
-                    'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                  }`}>
-                    {srv.environment}
+                  <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
+                      srv.environment === 'Produção' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                      srv.environment === 'Desenvolvimento' ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' :
+                      srv.environment === 'Homologação' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
+                      'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    }`}>
+                      {srv.environment}
+                    </span>
+
+                    {hasAlert && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase bg-orange-900 text-orange-200 border border-orange-600 flex items-center space-x-1">
+                        <AlertTriangle className="w-2.5 h-2.5 text-orange-400" />
+                        <span>ALERTA</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className={`text-xs font-bold mt-2 line-clamp-1 ${hasAlert ? 'text-orange-200' : 'text-white'}`}>
+                    {srv.name}
+                  </h3>
+                  <span className={`text-[11px] font-mono block mt-0.5 ${hasAlert ? 'text-orange-300/80' : 'text-cyan-400'}`}>
+                    {srv.host}:{srv.port}
                   </span>
-                  <h3 className="text-xs font-bold text-white mt-2 line-clamp-1">{srv.name}</h3>
-                  <span className="text-[11px] font-mono text-cyan-400 block mt-0.5">{srv.host}:{srv.port}</span>
                 </div>
               </div>
 
+              {/* Warning chip if zero tables or other alert */}
+              {hasAlert && (
+                <div className="mt-2 px-2 py-1 rounded-lg bg-orange-900/60 border border-orange-600/70 text-[10px] text-orange-200 font-mono flex items-center space-x-1">
+                  <AlertTriangle className="w-3 h-3 text-orange-400 flex-shrink-0" />
+                  <span className="truncate">
+                    {hasZeroTables
+                      ? `${zeroTableDbs.length} banco(s) sem tabelas`
+                      : `Uso CPU: ${srv.cpuUsagePercent}%`}
+                  </span>
+                </div>
+              )}
+
               {/* Server Stats Pills */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-[11px] font-mono">
+              <div className={`mt-4 pt-3 border-t grid grid-cols-2 gap-2 text-[11px] font-mono ${
+                hasAlert ? 'border-orange-800/60' : 'border-slate-800/80'
+              }`}>
                 <div>
-                  <span className="text-slate-500 text-[10px] block">CPU / Latência</span>
-                  <span className={`font-bold ${srv.cpuUsagePercent > 80 ? 'text-amber-400' : 'text-slate-200'}`}>
+                  <span className={`text-[10px] block ${hasAlert ? 'text-orange-300/70' : 'text-slate-500'}`}>CPU / Latência</span>
+                  <span className={`font-bold ${hasAlert ? 'text-orange-200' : srv.cpuUsagePercent > 80 ? 'text-amber-400' : 'text-slate-200'}`}>
                     {srv.cpuUsagePercent}% | {srv.avgLatencyMs}ms
                   </span>
                 </div>
 
                 <div>
-                  <span className="text-slate-500 text-[10px] block">Bancos Detectados</span>
-                  <span className="font-bold text-cyan-300 flex items-center space-x-1">
-                    <Database className="w-3 h-3 text-cyan-400" />
+                  <span className={`text-[10px] block ${hasAlert ? 'text-orange-300/70' : 'text-slate-500'}`}>Bancos Detectados</span>
+                  <span className={`font-bold flex items-center space-x-1 ${hasAlert ? 'text-orange-200' : 'text-cyan-300'}`}>
+                    <Database className={`w-3 h-3 ${hasAlert ? 'text-orange-400' : 'text-cyan-400'}`} />
                     <span>{srv.totalDatabasesCount} dbs ({srv.totalSizeFormatted})</span>
                   </span>
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-800/50 pt-2">
+              <div className={`mt-3 flex items-center justify-between text-[10px] border-t pt-2 ${
+                hasAlert ? 'border-orange-800/50 text-orange-300/80' : 'border-slate-800/50 text-slate-500'
+              }`}>
                 <span>{srv.pgVersion}</span>
-                <span className="text-emerald-400 font-semibold">{srv.environment}</span>
+                <span className={hasAlert ? 'text-orange-300 font-semibold' : 'text-emerald-400 font-semibold'}>{srv.environment}</span>
               </div>
             </div>
           );

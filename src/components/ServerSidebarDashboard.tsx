@@ -66,12 +66,31 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   onOpenConnectionsModal
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação'>('TODOS');
+  const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação' | 'ALERTAS'>('TODOS');
   const [activeTab, setActiveTab] = useState<'databases' | 'metrics' | 'queries_locks'>('databases');
   const [editingServer, setEditingServer] = useState<ServerInstance | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
+
+  // Helper to detect server alerts (zero tables, high cpu, warning status, etc.)
+  const getServerAlertInfo = (srv: ServerInstance) => {
+    const zeroTableDbs = (srv.databases || []).filter(
+      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
+    );
+    const hasZeroTables = zeroTableDbs.length > 0;
+    const isHighCpu = srv.cpuUsagePercent > 80;
+    const isWarningStatus = srv.status === 'warning' || srv.status === 'critical';
+    const hasAlert = hasZeroTables || isHighCpu || isWarningStatus;
+
+    return {
+      hasAlert,
+      hasZeroTables,
+      zeroTableDbs,
+      isHighCpu,
+      isWarningStatus
+    };
+  };
 
   const handleAddNewServerClick = () => {
     const newServer: ServerInstance = {
@@ -97,6 +116,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           maxConnections: 100,
           tps: 120,
           cacheHitRatio: 99.5,
+          tablesCount: 0,
           owner: 'postgres',
           encoding: 'UTF8',
           status: 'online'
@@ -107,9 +127,14 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
     setIsEditModalOpen(true);
   };
 
-  // Environment tag list with abbreviations
-  const envTags: { key: 'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação'; label: string; full: string }[] = [
+  const alertServersCount = servers.filter((s) => getServerAlertInfo(s).hasAlert).length;
+
+  // Environment tag list with abbreviations and Alertas
+  const envTags: { key: 'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação' | 'ALERTAS'; label: string; full: string }[] = [
     { key: 'TODOS', label: 'TODOS', full: 'Todos os Ambientes' },
+    ...(alertServersCount > 0
+      ? [{ key: 'ALERTAS' as const, label: 'ALERTAS', full: 'Servidores com Alertas' }]
+      : []),
     { key: 'Produção', label: 'PROD', full: 'Produção' },
     { key: 'Desenvolvimento', label: 'DEV', full: 'Desenvolvimento' },
     { key: 'Homologação', label: 'HOMO', full: 'Homologação' }
@@ -117,7 +142,14 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
 
   // Filter servers in sidebar by search term AND selected environment tag
   const filteredServers = servers.filter((srv) => {
-    const matchesEnv = selectedEnvFilter === 'TODOS' || srv.environment === selectedEnvFilter;
+    const alertInfo = getServerAlertInfo(srv);
+    const matchesEnv =
+      selectedEnvFilter === 'TODOS'
+        ? true
+        : selectedEnvFilter === 'ALERTAS'
+        ? alertInfo.hasAlert
+        : srv.environment === selectedEnvFilter;
+
     const matchesSearch =
       srv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       srv.host.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -157,6 +189,8 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
             const count =
               tag.key === 'TODOS'
                 ? servers.length
+                : tag.key === 'ALERTAS'
+                ? alertServersCount
                 : servers.filter((s) => s.environment === tag.key).length;
 
             return (
@@ -166,20 +200,31 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                 title={tag.full}
                 className={`px-2 py-1 text-[10px] font-bold font-mono rounded-lg transition-all flex items-center space-x-1 whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? tag.key === 'Produção'
+                    ? tag.key === 'ALERTAS'
+                      ? 'bg-orange-950 text-orange-200 border border-orange-600 shadow-sm shadow-orange-950 ring-1 ring-orange-500'
+                      : tag.key === 'Produção'
                       ? 'bg-rose-950 text-rose-200 border border-rose-700 shadow-sm shadow-rose-950'
                       : tag.key === 'Desenvolvimento'
                       ? 'bg-cyan-950 text-cyan-200 border border-cyan-700 shadow-sm shadow-cyan-950'
                       : tag.key === 'Homologação'
                       ? 'bg-amber-950 text-amber-200 border border-amber-700 shadow-sm shadow-amber-950'
                       : 'bg-cyan-600 text-white border border-cyan-400 shadow-sm'
+                    : tag.key === 'ALERTAS'
+                    ? 'bg-orange-950/60 text-orange-300 border border-orange-800/80 hover:bg-orange-900/80 hover:text-orange-100'
                     : 'bg-slate-950/80 text-slate-400 border border-slate-800/80 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
               >
+                {tag.key === 'ALERTAS' && <AlertTriangle className="w-3 h-3 text-orange-400 flex-shrink-0" />}
                 <span>{tag.label}</span>
                 <span
                   className={`px-1 py-0.2 text-[9px] rounded-full ${
-                    isActive ? 'bg-black/40 text-white font-bold' : 'bg-slate-800 text-slate-500'
+                    isActive
+                      ? tag.key === 'ALERTAS'
+                        ? 'bg-orange-800 text-orange-100 font-bold'
+                        : 'bg-black/40 text-white font-bold'
+                      : tag.key === 'ALERTAS'
+                      ? 'bg-orange-900/80 text-orange-300'
+                      : 'bg-slate-800 text-slate-500'
                   }`}
                 >
                   {count}
@@ -210,6 +255,18 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           ) : (
             filteredServers.map((srv) => {
               const isSelected = srv.id === activeServer.id;
+              const alertInfo = getServerAlertInfo(srv);
+
+              let cardBgClass = '';
+              if (alertInfo.hasAlert) {
+                cardBgClass = isSelected
+                  ? 'bg-orange-900/90 border-orange-400 ring-2 ring-orange-500 shadow-lg shadow-orange-950/80 text-orange-100'
+                  : 'bg-orange-950/90 border-orange-500/80 hover:bg-orange-900 hover:border-orange-400 text-orange-100 shadow-md shadow-orange-950/40';
+              } else if (isSelected) {
+                cardBgClass = 'bg-slate-950 border-cyan-500/80 ring-1 ring-cyan-500/50 shadow-md shadow-cyan-950/40';
+              } else {
+                cardBgClass = 'bg-slate-950/40 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950/80';
+              }
 
               return (
                 <div
@@ -220,29 +277,44 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                       onSelectDatabase(srv.databases[0].datname);
                     }
                   }}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer group relative ${
-                    isSelected
-                      ? 'bg-slate-950 border-cyan-500/80 ring-1 ring-cyan-500/50 shadow-md shadow-cyan-950/40'
-                      : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950/80'
-                  }`}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer group relative ${cardBgClass}`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-2 truncate">
-                      <span
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          srv.status === 'healthy'
-                            ? 'bg-emerald-400 shadow-sm shadow-emerald-400'
-                            : srv.status === 'warning'
-                            ? 'bg-amber-400'
-                            : 'bg-rose-500'
+                      {alertInfo.hasAlert ? (
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400 shadow-sm shadow-orange-400 ring-2 ring-orange-500/50 animate-pulse flex-shrink-0" />
+                      ) : (
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            srv.status === 'healthy'
+                              ? 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                              : srv.status === 'warning'
+                              ? 'bg-amber-400'
+                              : 'bg-rose-500'
+                          }`}
+                        />
+                      )}
+                      <h3
+                        className={`text-xs font-bold truncate ${
+                          alertInfo.hasAlert
+                            ? 'text-orange-200'
+                            : isSelected
+                            ? 'text-cyan-300'
+                            : 'text-slate-200 group-hover:text-white'
                         }`}
-                      />
-                      <h3 className={`text-xs font-bold truncate ${isSelected ? 'text-cyan-300' : 'text-slate-200 group-hover:text-white'}`}>
+                      >
                         {srv.name}
                       </h3>
                     </div>
 
                     <div className="flex items-center space-x-1 flex-shrink-0">
+                      {alertInfo.hasAlert && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold font-mono uppercase rounded bg-orange-900 text-orange-200 border border-orange-600 flex items-center space-x-0.5">
+                          <AlertTriangle className="w-2.5 h-2.5 text-orange-400" />
+                          <span>ALERTA</span>
+                        </span>
+                      )}
+
                       <span
                         className={`px-1.5 py-0.5 text-[9px] font-bold font-mono uppercase rounded ${
                           srv.environment === 'Produção'
@@ -263,36 +335,59 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                           : 'TEST'}
                       </span>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingServer(srv);
-                        setIsEditModalOpen(true);
-                      }}
-                      title="Editar ou remover servidor"
-                      className="p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingServer(srv);
+                          setIsEditModalOpen(true);
+                        }}
+                        title="Editar ou remover servidor"
+                        className={`p-1 rounded-lg transition-all cursor-pointer ${
+                          alertInfo.hasAlert
+                            ? 'text-orange-300 hover:text-white hover:bg-orange-800/60'
+                            : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={`mt-1.5 text-[11px] font-mono truncate ${alertInfo.hasAlert ? 'text-orange-300/80' : 'text-slate-400'}`}>
+                    {srv.host}:{srv.port}
+                  </div>
+
+                  {/* Warning Details Banner inside server card */}
+                  {alertInfo.hasAlert && (
+                    <div className="mt-2 px-2 py-1 rounded-lg bg-orange-900/60 border border-orange-600/70 text-[10px] text-orange-200 font-mono flex items-center space-x-1.5 shadow-sm">
+                      <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                      <span className="truncate">
+                        {alertInfo.hasZeroTables
+                          ? `${alertInfo.zeroTableDbs.length} banco(s) sem contagem de tabelas`
+                          : alertInfo.isHighCpu
+                          ? `Uso de CPU crítico (${srv.cpuUsagePercent}%)`
+                          : 'Instabilidade detectada no servidor'}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className={`mt-2 pt-2 border-t flex items-center justify-between text-[10px] ${
+                    alertInfo.hasAlert ? 'border-orange-800/60 text-orange-300/90' : 'border-slate-800/60 text-slate-500'
+                  }`}>
+                    <span className={`flex items-center space-x-1 font-mono ${alertInfo.hasAlert ? 'text-orange-300 font-bold' : 'text-cyan-400'}`}>
+                      <Database className="w-3 h-3" />
+                      <span>{srv.totalDatabasesCount} bancos</span>
+                    </span>
+
+                    <span className={`font-mono ${alertInfo.hasAlert ? 'text-orange-200 font-bold' : 'text-slate-400'}`}>
+                      CPU {srv.cpuUsagePercent}%
+                    </span>
                   </div>
                 </div>
-
-                <div className="mt-2 text-[11px] font-mono text-slate-400 truncate">
-                  {srv.host}:{srv.port}
-                </div>
-
-                <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
-                  <span className="flex items-center space-x-1 font-mono text-cyan-400">
-                    <Database className="w-3 h-3" />
-                    <span>{srv.totalDatabasesCount} bancos</span>
-                  </span>
-
-                  <span className="font-mono text-slate-400">CPU {srv.cpuUsagePercent}%</span>
-                </div>
-              </div>
-            );
-          }))}
+              );
+            })
+          )}
         </div>
 
         {/* Sidebar Footer Status Indicator */}

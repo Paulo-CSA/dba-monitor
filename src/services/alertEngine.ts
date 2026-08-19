@@ -108,7 +108,7 @@ export class AlertEngine {
         for (const srv of servers) {
           if (!srv.databases) continue;
           for (const db of srv.databases) {
-            if (db.datname.toLowerCase() === 'postgres') continue;
+            if (db.datname.toLowerCase() === 'postgres, root') continue;
             const val = db.tablesCount ?? 0;
             let triggered = false;
             if (rule.operator === '<' && val < rule.thresholdValue) triggered = true;

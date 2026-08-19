@@ -32,6 +32,15 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
   const activeDb =
     activeServer.databases.find((d) => d.datname === selectedDatabaseName) || activeServer.databases[0];
 
+  const checkServerAlert = (srv: ServerInstance) => {
+    const hasZeroTables = (srv.databases || []).some(
+      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
+    );
+    return hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
+  };
+
+  const isActiveServerInAlert = checkServerAlert(activeServer);
+
   const getEnvBadgeClass = (env: string) => {
     switch (env) {
       case 'Produção':
@@ -64,8 +73,12 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
         {/* Left: Server and Database Selector Controls */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Server Select Dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 focus-within:ring-1 focus-within:ring-cyan-500">
-            <Server className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+          <div className={`flex items-center space-x-2 bg-slate-950 border rounded-xl px-3 py-1.5 focus-within:ring-1 ${
+            isActiveServerInAlert
+              ? 'border-orange-500/80 focus-within:ring-orange-500 text-orange-200'
+              : 'border-slate-800 focus-within:ring-cyan-500'
+          }`}>
+            <Server className={`w-4 h-4 flex-shrink-0 ${isActiveServerInAlert ? 'text-orange-400' : 'text-cyan-400'}`} />
             <span className="text-xs text-slate-400 font-medium">Servidor:</span>
             <select
               value={activeServer.id}
@@ -77,13 +90,18 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
                   onSelectDatabase(targetSrv.databases[0].datname);
                 }
               }}
-              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate"
+              className={`bg-transparent text-xs font-bold focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate ${
+                isActiveServerInAlert ? 'text-orange-200' : 'text-white'
+              }`}
             >
-              {servers.map((srv) => (
-                <option key={srv.id} value={srv.id} className="bg-slate-950 text-slate-100">
-                  [{getEnvShort(srv.environment)}] {srv.name} ({srv.host})
-                </option>
-              ))}
+              {servers.map((srv) => {
+                const hasAlert = checkServerAlert(srv);
+                return (
+                  <option key={srv.id} value={srv.id} className="bg-slate-950 text-slate-100">
+                    {hasAlert ? '⚠️ ' : ''}[{getEnvShort(srv.environment)}] {srv.name} ({srv.host})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -98,15 +116,18 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
               onChange={(e) => onSelectDatabase(e.target.value)}
               className="bg-transparent text-xs font-bold text-cyan-300 font-mono focus:outline-none cursor-pointer max-w-[160px] sm:max-w-[200px] truncate"
             >
-              {activeServer.databases.map((db) => (
-                <option key={db.datname} value={db.datname} className="bg-slate-950 text-slate-100 font-mono">
-                  {db.datname} ({db.sizeFormatted})
-                </option>
-              ))}
+              {activeServer.databases.map((db) => {
+                const isZero = (db.tablesCount ?? 0) < 1 && db.datname.toLowerCase() !== 'postgres';
+                return (
+                  <option key={db.datname} value={db.datname} className="bg-slate-950 text-slate-100 font-mono">
+                    {isZero ? '⚠️ ' : ''}{db.datname} ({db.sizeFormatted})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
-          {/* Environment Tag Badge */}
+          {/* Environment Tag Badge & Active Alert Indicator */}
           <span
             className={`px-2.5 py-1 text-xs font-bold font-mono rounded-lg border uppercase tracking-wide flex items-center space-x-1.5 ${getEnvBadgeClass(
               activeServer.environment
@@ -125,6 +146,13 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
             />
             <span>{activeServer.environment} ({getEnvShort(activeServer.environment)})</span>
           </span>
+
+          {isActiveServerInAlert && (
+            <span className="px-2.5 py-1 text-xs font-bold font-mono rounded-lg bg-orange-950 text-orange-200 border border-orange-600 flex items-center space-x-1 shadow-sm">
+              <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 animate-pulse" />
+              <span>ALERTA ATIVO NO SERVIDOR</span>
+            </span>
+          )}
         </div>
 
         {/* Right: Quick Telemetry Pills */}
