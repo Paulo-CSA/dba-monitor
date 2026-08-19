@@ -31,7 +31,8 @@ import {
   HardDrive,
   BarChart2,
   CheckCircle2,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Check
 } from 'lucide-react';
 import { formatMs, formatBytes } from '../utils/formatters';
 
@@ -42,6 +43,7 @@ interface GlobalDashboardViewProps {
   onSelectServer?: (serverId: string) => void;
   onSwitchTab?: (tab: string) => void;
   onOpenConnectionsModal?: () => void;
+  onAcknowledgeAlert?: (alertId: string, serverId?: string, dbName?: string) => void;
 }
 
 export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
@@ -50,7 +52,8 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
   metrics,
   onSelectServer,
   onSwitchTab,
-  onOpenConnectionsModal
+  onOpenConnectionsModal,
+  onAcknowledgeAlert
 }) => {
   // Calculate aggregated metrics across all servers
   const totalServers = servers.length;
@@ -276,8 +279,17 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                   </div>
                   <p className="text-xs mt-1 font-mono leading-relaxed">{alert.message}</p>
                   <div className="mt-2 flex items-center justify-between text-[10px] opacity-80 font-mono">
-                    <span>Host: {alert.serverHost}</span>
-                    <span>{alert.triggeredAtFormatted}</span>
+                    <span>Host: {alert.serverHost} | {alert.triggeredAtFormatted}</span>
+                    {onAcknowledgeAlert && (
+                      <button
+                        onClick={() => onAcknowledgeAlert(alert.id, undefined, alert.ruleName.includes('(') ? alert.ruleName.split('(')[1]?.replace(')', '') : undefined)}
+                        className="px-2 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 text-white font-bold text-[10px] flex items-center space-x-1 border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer"
+                        title="Marcar como Ciente e silenciar alerta"
+                      >
+                        <Check className="w-3 h-3" />
+                        <span>Ciente</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

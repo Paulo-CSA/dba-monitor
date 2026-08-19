@@ -9,6 +9,7 @@ interface ServerFleetOverviewProps {
   selectedDatabaseName: string;
   onSelectServer: (serverId: string) => void;
   onSelectDatabase: (datname: string) => void;
+  silencedDbs?: Record<string, boolean>;
 }
 
 export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
@@ -16,7 +17,8 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
   selectedServerId,
   selectedDatabaseName,
   onSelectServer,
-  onSelectDatabase
+  onSelectDatabase,
+  silencedDbs = {}
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   if (servers.length === 0) {
@@ -78,9 +80,17 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {filteredServers.map((srv) => {
           const isSelected = srv.id === activeServer.id;
-          const zeroTableDbs = (srv.databases || []).filter(
-            (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
-          );
+          const zeroTableDbs = (srv.databases || []).filter((d) => {
+            const isExcluded =
+              d.datname.toLowerCase() === 'postgres' ||
+              d.datname.toLowerCase() === 'root' ||
+              d.datname.toLowerCase().startsWith('template');
+            const isSilenced = Boolean(
+              silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
+                silencedDbs[d.datname.toLowerCase()]
+            );
+            return (d.tablesCount ?? 0) < 1 && !isExcluded && !isSilenced;
+          });
           const hasZeroTables = zeroTableDbs.length > 0;
           const hasAlert = hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
 

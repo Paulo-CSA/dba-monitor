@@ -5,6 +5,8 @@ import { ServerInstance } from '../types/serverFleet';
 export class AlertEngine {
   private rules: AlertRule[] = [];
   private activeAlerts: ActiveAlert[] = [];
+  private acknowledgedIds: Set<string> = new Set();
+  private silencedDbs: Set<string> = new Set();
 
   constructor() {
     this.rules = [
@@ -116,8 +118,14 @@ export class AlertEngine {
             if (rule.operator === '==' && val === rule.thresholdValue) triggered = true;
 
             if (triggered) {
+              const alertId = `alert-${rule.id}-${srv.id}-${db.datname}`;
+              const isSilenced =
+                this.acknowledgedIds.has(alertId) ||
+                this.silencedDbs.has(`${srv.id}:${db.datname.toLowerCase()}`) ||
+                this.silencedDbs.has(db.datname.toLowerCase());
+
               newActiveAlerts.push({
-                id: `alert-${rule.id}-${srv.id}-${db.datname}`,
+                id: alertId,
                 ruleId: rule.id,
                 ruleName: `${rule.name} (${db.datname})`,
                 severity: rule.severity,
@@ -125,7 +133,7 @@ export class AlertEngine {
                 currentValue: val,
                 thresholdValue: rule.thresholdValue,
                 triggeredAt: now,
-                acknowledged: false
+                acknowledged: isSilenced
               });
             }
           }
@@ -147,8 +155,10 @@ export class AlertEngine {
       if (rule.operator === '==' && val === rule.thresholdValue) triggered = true;
 
       if (triggered) {
+        const alertId = `alert-${rule.id}-${Math.floor(Date.now() / 10000)}`;
+        const isSilenced = this.acknowledgedIds.has(alertId) || this.acknowledgedIds.has(rule.id);
         newActiveAlerts.push({
-          id: `alert-${rule.id}-${Date.now()}`,
+          id: alertId,
           ruleId: rule.id,
           ruleName: rule.name,
           severity: rule.severity,
@@ -156,7 +166,7 @@ export class AlertEngine {
           currentValue: val,
           thresholdValue: rule.thresholdValue,
           triggeredAt: now,
-          acknowledged: false
+          acknowledged: isSilenced
         });
       }
     }
@@ -169,9 +179,66 @@ export class AlertEngine {
     return [...this.activeAlerts];
   }
 
-  public acknowledgeAlert(id: string): void {
+  public acknowledgeAlert(id: string, serverId?: string, dbName?: string): void {
+    this.acknowledgedIds.add(id);
+    if (serverId && dbName) {
+      this.silencedDbs.add(`${serverId}:${dbName.toLowerCase()}`);
+    } else if (dbName) {
+      this.silencedDbs.add(dbName.toLowerCase());
+    }
+    // Also try to extract from id if formatted as alert-rule-*-srvId-dbName
+    const parts = id.split('-');
+    if (parts.length >= 4) {
+      const extractedDb = parts[parts.length - 1];
+      if (extractedDb) {
+        this.silencedDbs.add(extractedDb.toLowerCase());
+      }
+    }
     const a = this.activeAlerts.find(x => x.id === id);
     if (a) a.acknowledged = true;
+  }
+
+  public unacknowledgeAlert(id: string): void {
+    this.acknowledgedIds.delete(id);
+    const parts = id.split('-');
+    if (parts.length >= 4) {
+      const extractedDb = parts[parts.length - 1];
+      if (extractedDb) {
+        this.silencedDbs.delete(extractedDb.toLowerCase());
+      }
+    }
+    const a = this.activeAlerts.find(x => x.id === id);
+    if (a) a.acknowledged = false;
+  }
+
+  public unsilenceDatabase(serverId: string, dbName: string): void {
+    const key = `${serverId}:${dbName.toLowerCase()}`;
+    this.silencedDbs.delete(key);
+    this.silencedDbs.delete(dbName.toLowerCase());
+
+    // Also remove any matching alert IDs
+    for (const id of Array.from(this.acknowledgedIds)) {
+      if (id.includes(dbName) || id.includes(serverId)) {
+        this.acknowledgedIds.delete(id);
+      }
+    }
+
+    for (const a of this.activeAlerts) {
+      if (a.id.includes(dbName)) {
+        a.acknowledged = false;
+      }
+    }
+  }
+
+  public isDatabaseSilenced(serverId: string, dbName: string): boolean {
+    return (
+      this.silencedDbs.has(`${serverId}:${dbName.toLowerCase()}`) ||
+      this.silencedDbs.has(dbName.toLowerCase())
+    );
+  }
+
+  public getSilencedDatabases(): string[] {
+    return Array.from(this.silencedDbs);
   }
 }
 

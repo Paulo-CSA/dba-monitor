@@ -535,6 +535,50 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Acknowledge (Ciente) alert endpoint
+  app.post('/api/db/alerts/acknowledge', (req, res) => {
+    const { id, serverId, dbName } = req.body || {};
+    if (id) {
+      alertEngineSingleton.acknowledgeAlert(id, serverId, dbName);
+    } else if (serverId && dbName) {
+      alertEngineSingleton.acknowledgeAlert(`alert-db-${serverId}-${dbName}`, serverId, dbName);
+    }
+    res.json({
+      success: true,
+      silencedDbs: alertEngineSingleton.getSilencedDatabases(),
+      alerts: alertEngineSingleton.getActiveAlerts()
+    });
+  });
+
+  // Unacknowledge / Unsilence alert endpoint
+  app.post('/api/db/alerts/unacknowledge', (req, res) => {
+    const { id, serverId, dbName } = req.body || {};
+    if (id) {
+      alertEngineSingleton.unacknowledgeAlert(id);
+    }
+    if (serverId && dbName) {
+      alertEngineSingleton.unsilenceDatabase(serverId, dbName);
+    }
+    res.json({
+      success: true,
+      silencedDbs: alertEngineSingleton.getSilencedDatabases(),
+      alerts: alertEngineSingleton.getActiveAlerts()
+    });
+  });
+
+  // Unsilence Database endpoint
+  app.post('/api/db/alerts/unsilence-db', (req, res) => {
+    const { serverId, dbName } = req.body || {};
+    if (dbName) {
+      alertEngineSingleton.unsilenceDatabase(serverId || '', dbName);
+    }
+    res.json({
+      success: true,
+      silencedDbs: alertEngineSingleton.getSilencedDatabases(),
+      alerts: alertEngineSingleton.getActiveAlerts()
+    });
+  });
+
   // AI Diagnostic endpoint for analyzing slow queries & deadlock scenarios
   app.post('/api/db/ai-diagnostic', async (req, res) => {
     try {

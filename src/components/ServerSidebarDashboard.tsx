@@ -27,7 +27,9 @@ import {
   AlertTriangle,
   Radio,
   Pencil,
-  Plus
+  Plus,
+  X,
+  Check
 } from 'lucide-react';
 
 interface ServerSidebarDashboardProps {
@@ -46,6 +48,9 @@ interface ServerSidebarDashboardProps {
   onDeleteServer?: (serverId: string) => void;
   onAddServer?: (newServer: ServerInstance) => void;
   onOpenConnectionsModal?: () => void;
+  silencedDbs?: Record<string, boolean>;
+  onAcknowledgeAlert?: (alertId: string, serverId?: string, dbName?: string) => void;
+  onUnsilenceDatabase?: (serverId: string, dbName: string) => void;
 }
 
 export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
@@ -63,7 +68,10 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   onUpdateServer,
   onDeleteServer,
   onAddServer,
-  onOpenConnectionsModal
+  onOpenConnectionsModal,
+  silencedDbs = {},
+  onAcknowledgeAlert,
+  onUnsilenceDatabase
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEnvFilter, setSelectedEnvFilter] = useState<'TODOS' | 'Produção' | 'Desenvolvimento' | 'Homologação' | 'ALERTAS'>('TODOS');
@@ -75,9 +83,18 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
 
   // Helper to detect server alerts (zero tables, high cpu, warning status, etc.)
   const getServerAlertInfo = (srv: ServerInstance) => {
-    const zeroTableDbs = (srv.databases || []).filter(
-      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && d.datname.toLowerCase() !== 'root' && !d.datname.toLowerCase().startsWith('template')
-    );
+    const zeroTableDbs = (srv.databases || []).filter((d) => {
+      const isPostgresOrRoot =
+        d.datname.toLowerCase() === 'postgres' ||
+        d.datname.toLowerCase() === 'root' ||
+        d.datname.toLowerCase().startsWith('template');
+      const isSilenced = Boolean(
+        silencedDbs &&
+          (silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
+            silencedDbs[d.datname.toLowerCase()])
+      );
+      return (d.tablesCount ?? 0) < 1 && !isPostgresOrRoot && !isSilenced;
+    });
     const hasZeroTables = zeroTableDbs.length > 0;
     const isHighCpu = srv.cpuUsagePercent > 80;
     const isWarningStatus = srv.status === 'warning' || srv.status === 'critical';
@@ -519,8 +536,16 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                   {activeServer.databases.map((db) => {
                     const isSelectedDb = db.datname === selectedDatabaseName;
                     const tablesCount = db.tablesCount ?? 0;
-                    const isPostgres = db.datname.toLowerCase() === 'postgres';
-                    const isZeroTables = tablesCount < 1 && !isPostgres;
+                    const isPostgresOrRoot =
+                      db.datname.toLowerCase() === 'postgres' ||
+                      db.datname.toLowerCase() === 'root' ||
+                      db.datname.toLowerCase().startsWith('template');
+                    const isSilenced = Boolean(
+                      silencedDbs &&
+                        (silencedDbs[`${activeServer.id}:${db.datname.toLowerCase()}`] ||
+                          silencedDbs[db.datname.toLowerCase()])
+                    );
+                    const isZeroTables = tablesCount < 1 && !isPostgresOrRoot && !isSilenced;
 
                     let cardBgClass = '';
                     if (isZeroTables) {
@@ -539,7 +564,22 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                         onClick={() => onSelectDatabase(db.datname)}
                         className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${cardBgClass}`}
                       >
-                        <div className="flex items-center justify-between">
+                        {/* Top-left X icon when alert is silenced */}
+                        {isSilenced && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnsilenceDatabase?.(activeServer.id, db.datname);
+                            }}
+                            title="Alerta silenciado (Ciente). Clique no X para desconfigurar e voltar a alarmar"
+                            className="absolute top-2.5 left-2.5 z-20 px-2 py-0.5 rounded-lg bg-slate-900/95 hover:bg-rose-950/95 border border-slate-700 hover:border-rose-500 text-slate-300 hover:text-rose-200 transition-all shadow-md group flex items-center space-x-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-400" />
+                            <span className="text-[9px] font-mono text-slate-400 group-hover:text-rose-300 font-bold">Silenciado</span>
+                          </button>
+                        )}
+
+                        <div className={`flex items-center justify-between ${isSilenced ? 'pt-5' : ''}`}>
                           <div className="flex items-center space-x-2">
                             <Database className={`w-5 h-5 ${isZeroTables ? 'text-orange-400' : isSelectedDb ? 'text-cyan-400' : 'text-slate-500'}`} />
                             <div>
@@ -550,7 +590,25 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-1.5">
+                            {isZeroTables && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAcknowledgeAlert?.(
+                                    `alert-rule-zero-tables-${activeServer.id}-${db.datname}`,
+                                    activeServer.id,
+                                    db.datname
+                                  );
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-orange-800 hover:bg-orange-700 text-white font-bold text-[10px] flex items-center space-x-1 shadow-sm transition-colors cursor-pointer"
+                                title="Clique em Ciente para silenciar o alerta deste banco"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Ciente</span>
+                              </button>
+                            )}
+
                             {isSelectedDb && (
                               <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
                                 Selecionado

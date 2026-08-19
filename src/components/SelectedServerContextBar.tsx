@@ -8,6 +8,7 @@ interface SelectedServerContextBarProps {
   selectedDatabaseName: string;
   onSelectServer: (serverId: string) => void;
   onSelectDatabase: (datname: string) => void;
+  silencedDbs?: Record<string, boolean>;
 }
 
 export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> = ({
@@ -15,7 +16,8 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
   selectedServerId,
   selectedDatabaseName,
   onSelectServer,
-  onSelectDatabase
+  onSelectDatabase,
+  silencedDbs = {}
 }) => {
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
   if (!activeServer) {
@@ -33,9 +35,17 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
     activeServer.databases.find((d) => d.datname === selectedDatabaseName) || activeServer.databases[0];
 
   const checkServerAlert = (srv: ServerInstance) => {
-    const hasZeroTables = (srv.databases || []).some(
-      (d) => (d.tablesCount ?? 0) < 1 && d.datname.toLowerCase() !== 'postgres' && !d.datname.toLowerCase().startsWith('template')
-    );
+    const hasZeroTables = (srv.databases || []).some((d) => {
+      const isExcluded =
+        d.datname.toLowerCase() === 'postgres' ||
+        d.datname.toLowerCase() === 'root' ||
+        d.datname.toLowerCase().startsWith('template');
+      const isSilenced = Boolean(
+        silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
+          silencedDbs[d.datname.toLowerCase()]
+      );
+      return (d.tablesCount ?? 0) < 1 && !isExcluded && !isSilenced;
+    });
     return hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
   };
 

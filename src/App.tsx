@@ -57,6 +57,14 @@ export default function App() {
   // Alert States
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
+  const [silencedDbs, setSilencedDbs] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('pg_silenced_dbs');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Modal States
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -545,6 +553,80 @@ export default function App() {
     }
   };
 
+  const handleAcknowledgeAlert = async (alertId: string, serverId?: string, dbName?: string) => {
+    let sId = serverId;
+    let dName = dbName;
+    if (!dName) {
+      const parts = alertId.split('-');
+      if (parts.length >= 4) {
+        dName = parts[parts.length - 1];
+        sId = sId || parts[parts.length - 2];
+      }
+    }
+
+    setSilencedDbs((prev) => {
+      const next = { ...prev };
+      if (sId && dName) {
+        next[`${sId}:${dName.toLowerCase()}`] = true;
+      }
+      if (dName) {
+        next[dName.toLowerCase()] = true;
+      }
+      try {
+        localStorage.setItem('pg_silenced_dbs', JSON.stringify(next));
+      } catch (e) {
+        console.error('Failed to persist silenced dbs to localStorage', e);
+      }
+      return next;
+    });
+
+    setActiveAlerts((prev) =>
+      prev.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a))
+    );
+
+    try {
+      await fetch('/api/db/alerts/acknowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: alertId, serverId: sId, dbName: dName })
+      });
+    } catch (err) {
+      console.error('Error acknowledging alert:', err);
+    }
+  };
+
+  const handleUnsilenceDatabase = async (serverId: string, dbName: string) => {
+    setSilencedDbs((prev) => {
+      const next = { ...prev };
+      delete next[`${serverId}:${dbName.toLowerCase()}`];
+      delete next[dbName.toLowerCase()];
+      try {
+        localStorage.setItem('pg_silenced_dbs', JSON.stringify(next));
+      } catch (e) {
+        console.error('Failed to persist silenced dbs to localStorage', e);
+      }
+      return next;
+    });
+
+    setActiveAlerts((prev) =>
+      prev.map((a) =>
+        a.id.includes(dbName) || (a.ruleName && a.ruleName.includes(dbName))
+          ? { ...a, acknowledged: false }
+          : a
+      )
+    );
+
+    try {
+      await fetch('/api/db/alerts/unsilence-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, dbName })
+      });
+    } catch (err) {
+      console.error('Error unsilencing database alert:', err);
+    }
+  };
+
   // CSV Export Trigger
   const handleExportCSV = (options: ReportFilterOptions) => {
     if (!metrics || !sysConfig || !integrity || !backupOverview) return;
@@ -812,7 +894,25 @@ export default function App() {
         onOpenAlertModal={() => setShowAlertModal(true)}
         onOpenConnectionModal={() => setShowConnectionModal(true)}
         onManualRefresh={pollAllFleetServers}
-        activeAlertCount={activeAlerts.length}
+        activeAlertCount={
+          activeAlerts.filter((a) => {
+            if (a.acknowledged) return false;
+            for (const [key, isSilenced] of Object.entries(silencedDbs)) {
+              if (isSilenced && key) {
+                const dbPart = key.includes(':') ? key.split(':')[1] : key;
+                if (
+                  dbPart &&
+                  (a.id.toLowerCase().includes(dbPart) ||
+                    a.ruleName.toLowerCase().includes(dbPart) ||
+                    a.message.toLowerCase().includes(`'${dbPart}'`))
+                ) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }).length
+        }
         selectedServerHost={activeServerObject ? activeServerObject.host : 'Nenhum servidor'}
         selectedDatabaseName={activeDb ? activeDb.datname : 'Nenhum banco'}
       />
@@ -827,6 +927,7 @@ export default function App() {
             selectedDatabaseName={activeDb?.datname || selectedDatabaseName}
             onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
+            silencedDbs={silencedDbs}
           />
         )}
 
@@ -848,6 +949,9 @@ export default function App() {
             onDeleteServer={handleDeleteServer}
             onAddServer={handleAddServer}
             onOpenConnectionsModal={() => setShowConnectionsModal(true)}
+            silencedDbs={silencedDbs}
+            onAcknowledgeAlert={handleAcknowledgeAlert}
+            onUnsilenceDatabase={handleUnsilenceDatabase}
           />
         )}
 
@@ -860,6 +964,7 @@ export default function App() {
             onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSwitchTab={(tab) => setActiveTab(tab)}
             onOpenConnectionsModal={() => setShowConnectionsModal(true)}
+            onAcknowledgeAlert={handleAcknowledgeAlert}
           />
         )}
 
@@ -1052,9 +1157,7 @@ export default function App() {
           onAddRule={handleAddRule}
           onToggleRule={handleToggleRule}
           onClose={() => setShowAlertModal(false)}
-          onAcknowledgeAlert={(id) => {
-            setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-          }}
+          onAcknowledgeAlert={(id) => handleAcknowledgeAlert(id)}
         />
       )}
 
