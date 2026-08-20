@@ -92,7 +92,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
             return (d.tablesCount ?? 0) < 1 && !isExcluded && !isSilenced;
           });
           const hasZeroTables = zeroTableDbs.length > 0;
-          const hasAlert = hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
+          const hasAlert = hasZeroTables || srv.status === 'warning' || srv.status === 'critical';
 
           let cardBgClass = '';
           if (hasAlert) {
@@ -156,7 +156,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                   <span className="truncate">
                     {hasZeroTables
                       ? `${zeroTableDbs.length} banco(s) sem tabelas`
-                      : `Uso CPU: ${srv.cpuUsagePercent}%`}
+                      : 'Instabilidade detectada no servidor'}
                   </span>
                 </div>
               )}
@@ -166,9 +166,9 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                 hasAlert ? 'border-orange-800/60' : 'border-slate-800/80'
               }`}>
                 <div>
-                  <span className={`text-[10px] block ${hasAlert ? 'text-orange-300/70' : 'text-slate-500'}`}>CPU / Latência</span>
-                  <span className={`font-bold ${hasAlert ? 'text-orange-200' : srv.cpuUsagePercent > 80 ? 'text-amber-400' : 'text-slate-200'}`}>
-                    {srv.cpuUsagePercent}% | {srv.avgLatencyMs}ms
+                  <span className={`text-[10px] block ${hasAlert ? 'text-orange-300/70' : 'text-slate-500'}`}>Conexões Ativas</span>
+                  <span className={`font-bold ${hasAlert ? 'text-orange-200' : 'text-purple-300'}`}>
+                    {srv.totalActiveConnections} conexões
                   </span>
                 </div>
 

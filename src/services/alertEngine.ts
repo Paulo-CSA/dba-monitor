@@ -11,16 +11,16 @@ export class AlertEngine {
   constructor() {
     this.rules = [
       {
-        id: 'rule-cpu-high',
-        name: 'Uso de CPU Elevado',
-        metric: 'cpu_usage',
+        id: 'rule-conns-high',
+        name: 'Alto Volume de Conexões',
+        metric: 'active_connections',
         operator: '>',
-        thresholdValue: 80,
-        unit: '%',
-        severity: 'critical',
+        thresholdValue: 200,
+        unit: 'conns',
+        severity: 'warning',
         enabled: true,
-        notifySound: true,
-        description: 'Alerta disparado quando a CPU do servidor ultrapassar 80%.'
+        notifySound: false,
+        description: 'Alerta disparado quando o número de conexões ativas ultrapassar 200.'
       },
       {
         id: 'rule-lat-high',

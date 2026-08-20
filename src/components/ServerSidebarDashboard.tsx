@@ -96,15 +96,13 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
       return (d.tablesCount ?? 0) < 1 && !isPostgresOrRoot && !isSilenced;
     });
     const hasZeroTables = zeroTableDbs.length > 0;
-    const isHighCpu = srv.cpuUsagePercent > 80;
     const isWarningStatus = srv.status === 'warning' || srv.status === 'critical';
-    const hasAlert = hasZeroTables || isHighCpu || isWarningStatus;
+    const hasAlert = hasZeroTables || isWarningStatus;
 
     return {
       hasAlert,
       hasZeroTables,
       zeroTableDbs,
-      isHighCpu,
       isWarningStatus
     };
   };
@@ -382,8 +380,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                       <span className="truncate">
                         {alertInfo.hasZeroTables
                           ? `${alertInfo.zeroTableDbs.length} banco(s) sem contagem de tabelas`
-                          : alertInfo.isHighCpu
-                          ? `Uso de CPU crítico (${srv.cpuUsagePercent}%)`
                           : 'Instabilidade detectada no servidor'}
                       </span>
                     </div>
@@ -398,7 +394,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                     </span>
 
                     <span className={`font-mono ${alertInfo.hasAlert ? 'text-orange-200 font-bold' : 'text-slate-400'}`}>
-                      CPU {srv.cpuUsagePercent}%
+                      {srv.totalActiveConnections} conexões
                     </span>
                   </div>
                 </div>

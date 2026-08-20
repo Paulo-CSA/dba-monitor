@@ -46,7 +46,7 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
       );
       return (d.tablesCount ?? 0) < 1 && !isExcluded && !isSilenced;
     });
-    return hasZeroTables || srv.status === 'warning' || srv.status === 'critical' || srv.cpuUsagePercent > 80;
+    return hasZeroTables || srv.status === 'warning' || srv.status === 'critical';
   };
 
   const isActiveServerInAlert = checkServerAlert(activeServer);
