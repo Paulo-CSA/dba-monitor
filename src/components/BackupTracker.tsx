@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview, BackupEntry } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key, Copy, Check, RotateCcw, Edit3, Sparkles } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -18,6 +18,7 @@ interface BackupTrackerProps {
       sshPort?: number;
       targetFolder?: string;
       dbUser?: string;
+      customCommand?: string;
     }
   ) => void;
   onDeleteBackup?: (id: string) => void;
@@ -54,6 +55,11 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [sshPort, setSshPort] = useState<string>('22');
   const [dbUser, setDbUser] = useState<string>('postgres');
 
+  // State for manual CLI command editing
+  const [customCliCommand, setCustomCliCommand] = useState<string>('');
+  const [isCommandEdited, setIsCommandEdited] = useState<boolean>(false);
+  const [copiedCli, setCopiedCli] = useState<boolean>(false);
+
   const currentServerName = server ? (server.name || server.host) : 'SRV-BD';
   const currentDbName = databaseName || 'northwind';
 
@@ -67,6 +73,47 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       setSshHost(server.host);
     }
   }, [server?.id, server?.name, server?.host, databaseName, srvFolder, dbFolder]);
+
+  const generateDefaultCliCommand = (
+    actionType: 'pg_dump' | 'pg_basebackup',
+    folder: string,
+    user: string,
+    pass: string,
+    host: string,
+    port: string,
+    dUser: string,
+    dbName: string
+  ) => {
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+    const fileName = actionType === 'pg_dump'
+      ? `backup_${dbName}_${timestamp}.sql`
+      : `basebackup_${dbName}_${timestamp}`;
+    const fClean = (folder || `/backups/postgresql/${srvFolder}/${dbFolder}`).replace(/\/$/, '');
+    const passStr = pass ? '••••••••' : 'sua_senha';
+    const pFlag = port && Number(port) !== 22 ? `-p ${port} ` : '';
+
+    if (actionType === 'pg_dump') {
+      return `sshpass -p '${passStr}' ssh ${pFlag}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user || 'root'}@${host || '172.16.0.200'} "mkdir -p ${fClean} && sudo -u ${dUser || 'postgres'} pg_dump -d ${dbName} -F p > ${fClean}/${fileName}"`;
+    } else {
+      return `sshpass -p '${passStr}' ssh ${pFlag}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user || 'root'}@${host || '172.16.0.200'} "mkdir -p ${fClean}/${fileName} && sudo -u ${dUser || 'postgres'} pg_basebackup -D ${fClean}/${fileName} -F p -P"`;
+    }
+  };
+
+  useEffect(() => {
+    if (sshModalOpen && !isCommandEdited) {
+      const updated = generateDefaultCliCommand(
+        sshActionType,
+        targetFolder,
+        sshUser,
+        sshPassword,
+        sshHost,
+        sshPort,
+        dbUser,
+        currentDbName
+      );
+      setCustomCliCommand(updated);
+    }
+  }, [sshModalOpen, isCommandEdited, sshActionType, targetFolder, sshUser, sshPassword, sshHost, sshPort, dbUser, currentDbName]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
 
@@ -87,7 +134,53 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const handleOpenSshModal = (type: 'pg_dump' | 'pg_basebackup') => {
     setSshActionType(type);
+    const initialCmd = generateDefaultCliCommand(
+      type,
+      targetFolder,
+      sshUser,
+      sshPassword,
+      sshHost,
+      sshPort,
+      dbUser,
+      currentDbName
+    );
+    setCustomCliCommand(initialCmd);
+    setIsCommandEdited(false);
     setSshModalOpen(true);
+  };
+
+  const handleResetToDefaultCli = () => {
+    const defaultCmd = generateDefaultCliCommand(
+      sshActionType,
+      targetFolder,
+      sshUser,
+      sshPassword,
+      sshHost,
+      sshPort,
+      dbUser,
+      currentDbName
+    );
+    setCustomCliCommand(defaultCmd);
+    setIsCommandEdited(false);
+  };
+
+  const handleCopyCliCommand = () => {
+    navigator.clipboard.writeText(customCliCommand);
+    setCopiedCli(true);
+    setTimeout(() => setCopiedCli(false), 2000);
+  };
+
+  const handleAppendFlag = (flag: string) => {
+    let current = customCliCommand;
+    if (sshActionType === 'pg_dump' && current.includes('pg_dump')) {
+      current = current.replace(/pg_dump\s+/, `pg_dump ${flag} `);
+    } else if (sshActionType === 'pg_basebackup' && current.includes('pg_basebackup')) {
+      current = current.replace(/pg_basebackup\s+/, `pg_basebackup ${flag} `);
+    } else {
+      current = `${current} ${flag}`;
+    }
+    setCustomCliCommand(current);
+    setIsCommandEdited(true);
   };
 
   const handleConfirmSshBackup = () => {
@@ -102,24 +195,12 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
         sshHost,
         sshPort: Number(sshPort) || 22,
         targetFolder,
-        dbUser
+        dbUser,
+        customCommand: customCliCommand
       }
     );
     setSshModalOpen(false);
   };
-
-  const timestampSample = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
-  const sampleFileName = sshActionType === 'pg_dump' 
-    ? `backup_${currentDbName}_${timestampSample}.sql`
-    : `basebackup_${currentDbName}_${timestampSample}`;
-  
-  const folderClean = targetFolder.replace(/\/$/, '');
-  const passSample = sshPassword ? '••••••••' : 'sua_senha';
-
-  const portFlagStr = sshPort && Number(sshPort) !== 22 ? `-p ${sshPort} ` : '';
-  const previewCommand = sshActionType === 'pg_dump'
-    ? `sshpass -p '${passSample}' ssh ${portFlagStr}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${sshUser}@${sshHost} "mkdir -p ${folderClean} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${currentDbName} -F p > ${folderClean}/${sampleFileName}"`
-    : `sshpass -p '${passSample}' ssh ${portFlagStr}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${sshUser}@${sshHost} "mkdir -p ${folderClean}/${sampleFileName} && sudo -u ${dbUser || 'postgres'} pg_basebackup -D ${folderClean}/${sampleFileName} -F p -P"`;
 
   return (
     <div className="space-y-6">
@@ -509,11 +590,188 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
               </div>
             </div>
 
-            {/* Command Preview */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
-              <span className="text-xs font-semibold text-slate-400 block">Comando CLI Executado via SSH:</span>
-              <div className="font-mono text-[11px] text-cyan-300 bg-slate-900 p-2.5 rounded-lg border border-slate-800/80 overflow-x-auto select-all break-all leading-relaxed">
-                {previewCommand}
+            {/* Command Editor (Manual CLI Modification) */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <Terminal className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-white">Comando CLI Executado via SSH:</span>
+                  {isCommandEdited ? (
+                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/80">
+                      <Edit3 className="w-2.5 h-2.5" />
+                      <span>Editado manualmente</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-cyan-950/60 text-cyan-300 border border-cyan-800/60">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      <span>Gerado dinamicamente</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {isCommandEdited && (
+                    <button
+                      type="button"
+                      onClick={handleResetToDefaultCli}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 bg-slate-900 hover:bg-slate-800 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                      title="Restaurar o comando gerado pelos campos do formulário"
+                    >
+                      <RotateCcw className="w-3 h-3 text-amber-400" />
+                      <span>Restaurar Padrão</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCopyCliCommand}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium text-cyan-300 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800 transition-colors cursor-pointer"
+                    title="Copiar comando completo para a área de transferência"
+                  >
+                    {copiedCli ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400 font-semibold">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-cyan-400" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Editable Command Textarea */}
+              <div className="relative">
+                <textarea
+                  value={customCliCommand}
+                  onChange={(e) => {
+                    setCustomCliCommand(e.target.value);
+                    setIsCommandEdited(true);
+                  }}
+                  rows={4}
+                  className="w-full bg-slate-900 border border-slate-700/90 rounded-xl p-3 font-mono text-xs text-cyan-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 leading-relaxed resize-y selection:bg-cyan-900 selection:text-white"
+                  placeholder="Edite o comando SSH/PostgreSQL manualmente se desejar..."
+                  spellCheck={false}
+                />
+              </div>
+
+              {/* Quick flag helpers */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400 flex items-center space-x-1">
+                    <span>Inserir flags rápidas no comando:</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500">Você pode digitar qualquer parâmetro ou flag no campo acima</span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {sshActionType === 'pg_dump' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-v')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Modo detalhado (Verbose)"
+                      >
+                        + -v (verbose)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('--clean')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Limpar / Dropar objetos do banco antes de recriá-los"
+                      >
+                        + --clean
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('--if-exists')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Usar IF EXISTS nos comandos DROP"
+                      >
+                        + --if-exists
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-F c')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Formato Custom binário pg_dump (comprimido e flexível para pg_restore)"
+                      >
+                        + -F c (custom format)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-Z 9')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Nível de compressão gzip máxima (0 a 9)"
+                      >
+                        + -Z 9 (compressão)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-j 4')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Execução com 4 workers paralelos (requer formato Directory)"
+                      >
+                        + -j 4 (jobs)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-b')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Incluir Large Objects (Blobs)"
+                      >
+                        + -b (blobs)
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-X stream')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Streaming de logs WAL durante o basebackup"
+                      >
+                        + -X stream
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-c fast')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Realizar Checkpoint rápido no início"
+                      >
+                        + -c fast (checkpoint)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-z')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Compressão gzip no stream de basebackup"
+                      >
+                        + -z (gzip)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-v')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Modo detalhado (Verbose)"
+                      >
+                        + -v (verbose)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAppendFlag('-P')}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                        title="Exibir progresso de transferência"
+                      >
+                        + -P (progress)
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 

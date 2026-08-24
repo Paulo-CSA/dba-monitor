@@ -293,7 +293,8 @@ async function startServer() {
       sshPassword = '',
       sshHost,
       sshPort = 22,
-      dbUser = 'postgres'
+      dbUser = 'postgres',
+      customCommand
     } = req.body || {};
 
     const backupType = type === 'pg_dump' ? 'pg_dump' : 'pg_basebackup';
@@ -310,17 +311,41 @@ async function startServer() {
     let fullCommand = '';
     let finalLocation = '';
 
-    if (backupType === 'pg_dump') {
-      const fileName = `backup_${databaseName}_${timestamp}.sql`;
-      finalLocation = `${folder}/${fileName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F p > ${finalLocation}"`;
+    if (customCommand && typeof customCommand === 'string' && customCommand.trim()) {
+      fullCommand = customCommand.trim();
+      if (passEscaped) {
+        fullCommand = fullCommand
+          .replace(/sshpass -p '••••••••'/g, `sshpass -p '${passEscaped}'`)
+          .replace(/sshpass -p 'sua_senha'/g, `sshpass -p '${passEscaped}'`)
+          .replace(/sshpass -p ""/g, `sshpass -p '${passEscaped}'`)
+          .replace(/sshpass -p ''/g, `sshpass -p '${passEscaped}'`);
+      }
+
+      // Try to extract destination output file or directory from the custom command
+      const redirectMatch = fullCommand.match(/>\s*([^\s"]+)/);
+      const dirMatch = fullCommand.match(/-D\s+([^\s"]+)/);
+      if (redirectMatch && redirectMatch[1]) {
+        finalLocation = redirectMatch[1].replace(/["']/g, '');
+      } else if (dirMatch && dirMatch[1]) {
+        finalLocation = dirMatch[1].replace(/["']/g, '');
+      } else {
+        finalLocation = backupType === 'pg_dump'
+          ? `${folder}/backup_${databaseName}_${timestamp}.sql`
+          : `${folder}/basebackup_${databaseName}_${timestamp}`;
+      }
     } else {
-      const folderName = `basebackup_${databaseName}_${timestamp}`;
-      finalLocation = `${folder}/${folderName}`;
-      fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${finalLocation} && sudo -u ${dbUser || 'postgres'} pg_basebackup -D ${finalLocation} -F p -P"`;
+      if (backupType === 'pg_dump') {
+        const fileName = `backup_${databaseName}_${timestamp}.sql`;
+        finalLocation = `${folder}/${fileName}`;
+        fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F p > ${finalLocation}"`;
+      } else {
+        const folderName = `basebackup_${databaseName}_${timestamp}`;
+        finalLocation = `${folder}/${folderName}`;
+        fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${finalLocation} && sudo -u ${dbUser || 'postgres'} pg_basebackup -D ${finalLocation} -F p -P"`;
+      }
     }
 
-    const maskedCmd = fullCommand.replace(passEscaped, '••••••••');
+    const maskedCmd = passEscaped ? fullCommand.replace(new RegExp(passEscaped, 'g'), '••••••••') : fullCommand.replace(/sshpass -p '[^']*'/, "sshpass -p '••••••••'");
     console.log(`[Executing SSH Backup]: ${maskedCmd}`);
 
     exec(fullCommand, { timeout: 180000 }, async (err, stdout, stderr) => {

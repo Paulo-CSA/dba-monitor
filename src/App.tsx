@@ -434,6 +434,7 @@ export default function App() {
       sshPort?: number;
       targetFolder?: string;
       dbUser?: string;
+      customCommand?: string;
     }
   ) => {
     setIsTriggeringBackup(true);
@@ -462,7 +463,8 @@ export default function App() {
           sshPassword: sshParams?.sshPassword || '',
           sshHost: sshParams?.sshHost || srv?.host || '172.16.0.200',
           sshPort: sshParams?.sshPort || 22,
-          dbUser: sshParams?.dbUser || 'postgres'
+          dbUser: sshParams?.dbUser || 'postgres',
+          customCommand: sshParams?.customCommand
         })
       });
 
