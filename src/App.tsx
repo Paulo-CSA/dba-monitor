@@ -458,6 +458,7 @@ export default function App() {
           serverId: srv?.id,
           serverName: srv?.name || srv?.host,
           serverHost: sshParams?.sshHost || srv?.host,
+          pgVersion: srv?.pgVersion,
           databaseName: targetDbName,
           sshUser: sshParams?.sshUser || 'root',
           sshPassword: sshParams?.sshPassword || '',

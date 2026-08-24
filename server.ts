@@ -288,6 +288,7 @@ async function startServer() {
       serverId,
       serverName,
       serverHost,
+      pgVersion,
       databaseName = 'northwind',
       sshUser = 'root',
       sshPassword = '',
@@ -307,6 +308,9 @@ async function startServer() {
     const passEscaped = (sshPassword || '').replace(/'/g, "'\\''");
     const portFlag = portNum !== 22 ? `-p ${portNum} ` : '';
     const sshOpts = `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10`;
+
+    const vMatch = (pgVersion || '').match(/(\d+(\.\d+)?)/);
+    const isLegacyV8 = vMatch ? parseFloat(vMatch[1]) < 9.0 : false;
 
     let fullCommand = '';
     let finalLocation = '';
@@ -337,7 +341,8 @@ async function startServer() {
       if (backupType === 'pg_dump') {
         const fileName = `backup_${databaseName}_${timestamp}.sql`;
         finalLocation = `${folder}/${fileName}`;
-        fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump -d ${databaseName} -F p > ${finalLocation}"`;
+        const dumpDbSyntax = isLegacyV8 ? `${databaseName} -F p` : `-d ${databaseName} -F p`;
+        fullCommand = `sshpass -p '${passEscaped}' ssh ${sshOpts} ${portFlag}${user}@${host} "mkdir -p ${folder} && sudo -u ${dbUser || 'postgres'} pg_dump ${dumpDbSyntax} > ${finalLocation}"`;
       } else {
         const folderName = `basebackup_${databaseName}_${timestamp}`;
         finalLocation = `${folder}/${folderName}`;

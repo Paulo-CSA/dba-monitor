@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview, BackupEntry } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key, Copy, Check, RotateCcw, Edit3, Sparkles } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key, Copy, Check, RotateCcw, Edit3, Sparkles, Info, Cpu } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -62,6 +62,12 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
   const currentServerName = server ? (server.name || server.host) : 'SRV-BD';
   const currentDbName = databaseName || 'northwind';
+  const currentPgVersion = server?.pgVersion || 'PostgreSQL 16.2';
+
+  // Extract numeric major version (e.g. 8 for 'PostgreSQL 8.4', 16 for 'PostgreSQL 16.2')
+  const majorVersionMatch = currentPgVersion.match(/(\d+(\.\d+)?)/);
+  const majorVersionNum = majorVersionMatch ? parseFloat(majorVersionMatch[1]) : 16;
+  const isLegacyPg8OrOlder = majorVersionNum < 9.0;
 
   const srvFolder = currentServerName.replace(/[^a-zA-Z0-9_-]/g, '_');
   const dbFolder = currentDbName.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -82,7 +88,8 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
     host: string,
     port: string,
     dUser: string,
-    dbName: string
+    dbName: string,
+    pgVerStr?: string
   ) => {
     const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
     const fileName = actionType === 'pg_dump'
@@ -92,8 +99,16 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
     const passStr = pass ? '••••••••' : 'sua_senha';
     const pFlag = port && Number(port) !== 22 ? `-p ${port} ` : '';
 
+    const effectiveVer = pgVerStr || currentPgVersion;
+    const vMatch = effectiveVer.match(/(\d+(\.\d+)?)/);
+    const vNum = vMatch ? parseFloat(vMatch[1]) : 16;
+    const isLegacy = vNum < 9.0;
+
     if (actionType === 'pg_dump') {
-      return `sshpass -p '${passStr}' ssh ${pFlag}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user || 'root'}@${host || '172.16.0.200'} "mkdir -p ${fClean} && sudo -u ${dUser || 'postgres'} pg_dump -d ${dbName} -F p > ${fClean}/${fileName}"`;
+      // PostgreSQL 8.x and older used `pg_dump -U postgres -F p dbname > output.sql` (no -d flag)
+      // PostgreSQL 9.0+ supports `pg_dump -d dbname -F p > output.sql`
+      const dumpDbSyntax = isLegacy ? `${dbName} -F p` : `-d ${dbName} -F p`;
+      return `sshpass -p '${passStr}' ssh ${pFlag}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user || 'root'}@${host || '172.16.0.200'} "mkdir -p ${fClean} && sudo -u ${dUser || 'postgres'} pg_dump ${dumpDbSyntax} > ${fClean}/${fileName}"`;
     } else {
       return `sshpass -p '${passStr}' ssh ${pFlag}-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user || 'root'}@${host || '172.16.0.200'} "mkdir -p ${fClean}/${fileName} && sudo -u ${dUser || 'postgres'} pg_basebackup -D ${fClean}/${fileName} -F p -P"`;
     }
@@ -109,11 +124,12 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
         sshHost,
         sshPort,
         dbUser,
-        currentDbName
+        currentDbName,
+        currentPgVersion
       );
       setCustomCliCommand(updated);
     }
-  }, [sshModalOpen, isCommandEdited, sshActionType, targetFolder, sshUser, sshPassword, sshHost, sshPort, dbUser, currentDbName]);
+  }, [sshModalOpen, isCommandEdited, sshActionType, targetFolder, sshUser, sshPassword, sshHost, sshPort, dbUser, currentDbName, currentPgVersion]);
 
   const totalSizeFormatted = server ? server.totalSizeFormatted : backupOverview.totalBackupSizeFormatted;
 
@@ -142,7 +158,8 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       sshHost,
       sshPort,
       dbUser,
-      currentDbName
+      currentDbName,
+      currentPgVersion
     );
     setCustomCliCommand(initialCmd);
     setIsCommandEdited(false);
@@ -158,7 +175,8 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       sshHost,
       sshPort,
       dbUser,
-      currentDbName
+      currentDbName,
+      currentPgVersion
     );
     setCustomCliCommand(defaultCmd);
     setIsCommandEdited(false);
@@ -269,7 +287,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
 
       {/* Manual Backup Trigger Section via SSH */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
               <Terminal className="w-4 h-4 text-cyan-400" />
@@ -278,7 +296,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
             <p className="text-xs text-slate-400 mt-0.5">Crie diretórios e execute comandos de dump ou basebackup diretamente no servidor remoto</p>
           </div>
 
-          <div className="bg-slate-950/90 border border-slate-800/80 rounded-xl px-3 py-2 flex items-center space-x-3 text-xs">
+          <div className="bg-slate-950/90 border border-slate-800/80 rounded-xl px-3 py-2 flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center space-x-1.5">
               <Server className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-slate-400">Servidor:</span>
@@ -308,7 +326,9 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 <span className="font-bold font-mono text-white">{currentServerName}</span>
               )}
             </div>
-            <div className="h-3 w-px bg-slate-800" />
+
+            <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+
             <div className="flex items-center space-x-1.5">
               <Database className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-slate-400">Banco:</span>
@@ -326,6 +346,21 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 </select>
               ) : (
                 <span className="font-bold font-mono text-emerald-400">{currentDbName}</span>
+              )}
+            </div>
+
+            <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+
+            {/* PostgreSQL Engine Version Badge */}
+            <div className="flex items-center space-x-1.5 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Versão:</span>
+              <span className={`font-mono text-xs font-bold ${isLegacyPg8OrOlder ? 'text-amber-400' : 'text-cyan-300'}`}>
+                {currentPgVersion}
+              </span>
+              {isLegacyPg8OrOlder && (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-950/80 text-amber-300 border border-amber-800/80" title="PostgreSQL 8.x legado detectado (usa sintaxe sem flag -d no dump)">
+                  Legado v8
+                </span>
               )}
             </div>
           </div>
@@ -564,7 +599,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 />
               </div>
 
-              <div className="md:col-span-5">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Usuário do Banco (`-U`):
                 </label>
@@ -577,7 +612,7 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 />
               </div>
 
-              <div className="md:col-span-4">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Banco (`datname`):
                 </label>
@@ -588,7 +623,46 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                   className="w-full bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-bold font-mono rounded-xl px-3 py-2 opacity-80"
                 />
               </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Versão do PostgreSQL:
+                </label>
+                <div className={`w-full bg-slate-950 border ${isLegacyPg8OrOlder ? 'border-amber-800/80' : 'border-slate-800'} rounded-xl px-3 py-2 flex items-center justify-between`}>
+                  <span className={`text-xs font-mono font-bold ${isLegacyPg8OrOlder ? 'text-amber-300' : 'text-cyan-300'} truncate`}>
+                    {currentPgVersion}
+                  </span>
+                  {isLegacyPg8OrOlder && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 uppercase">
+                      v8
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
+
+            {/* Version Syntax Notice */}
+            {sshActionType === 'pg_dump' && (
+              <div className={`rounded-xl p-3 border text-xs flex items-start space-x-2.5 ${
+                isLegacyPg8OrOlder
+                  ? 'bg-amber-950/40 border-amber-800/60 text-amber-200'
+                  : 'bg-slate-950 border-slate-800 text-slate-300'
+              }`}>
+                <Info className={`w-4 h-4 mt-0.5 shrink-0 ${isLegacyPg8OrOlder ? 'text-amber-400' : 'text-cyan-400'}`} />
+                <div className="space-y-0.5">
+                  <span className="font-semibold block">
+                    {isLegacyPg8OrOlder
+                      ? `Detecção de PostgreSQL Legado (${currentPgVersion})`
+                      : `Sintaxe do PostgreSQL (${currentPgVersion})`}
+                  </span>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    {isLegacyPg8OrOlder
+                      ? 'No PostgreSQL 8.x e anteriores, a flag -d não é suportada pelo pg_dump. O comando padrão foi configurado automaticamente passando o nome do banco diretamente (ex: pg_dump ' + currentDbName + ' -F p).'
+                      : 'No PostgreSQL 9.0+, o comando padrão utiliza a flag padrão -d ' + currentDbName + ' -F p. Você pode ajustar manualmente abaixo caso necessário.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Command Editor (Manual CLI Modification) */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
