@@ -12,7 +12,8 @@ import {
   PieChart,
   Pie,
   AreaChart,
-  Area
+  Area,
+  LabelList
 } from 'recharts';
 import { ServerInstance } from '../types/serverFleet';
 import { ActiveAlert } from '../types/alerts';
@@ -113,6 +114,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
   }
   const topTpsServers = [...servers]
     .map((s) => ({
+      id: s.id,
       name: s.name.length > 20 ? s.name.substring(0, 18) + '...' : s.name,
       fullName: s.name,
       host: s.host,
@@ -178,20 +180,6 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
     { name: 'Desenvolvimento', value: envCounts.Desenvolvimento, color: '#06b6d4' },
     { name: 'Homologação', value: envCounts.Homologação, color: '#f59e0b' }
   ].filter((item) => item.value > 0);
-
-  // Environment Colors for bar labels
-  const getEnvBadgeStyle = (env: string) => {
-    switch (env) {
-      case 'Produção':
-        return 'bg-rose-950 text-rose-300 border-rose-800';
-      case 'Desenvolvimento':
-        return 'bg-cyan-950 text-cyan-300 border-cyan-800';
-      case 'Homologação':
-        return 'bg-amber-950 text-amber-300 border-amber-800';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -434,9 +422,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             )}
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={serverConnectionsData} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
+              <BarChart data={serverConnectionsData} layout="vertical" margin={{ top: 10, right: 80, left: 15, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                 <XAxis type="number" stroke="#64748b" tick={{ fontSize: 10 }} unit=" conns" />
                 <YAxis dataKey="name" type="category" stroke="#94a3b8" tick={{ fontSize: 11 }} width={110} />
@@ -458,6 +446,8 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                   {serverConnectionsData.map((entry, index) => (
                     <Cell
                       key={`srv-conn-${index}`}
+                      cursor={onSelectServer ? 'pointer' : 'default'}
+                      onClick={() => onSelectServer?.(entry.id)}
                       fill={
                         index === 0
                           ? '#a855f7'
@@ -471,42 +461,17 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                       }
                     />
                   ))}
+                  <LabelList
+                    dataKey="connections"
+                    position="right"
+                    fill="#d8b4fe"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: any) => `${value} conns`}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Table List representation below chart for clarity */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/80">
-            {serverConnectionsData.map((srv, idx) => (
-              <div
-                key={srv.id || idx}
-                onClick={() => onSelectServer?.(srv.id)}
-                className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:bg-slate-800/50 transition-colors text-xs cursor-pointer group"
-                title="Clique para selecionar este servidor"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                    #{idx + 1}
-                  </span>
-                  <div className="truncate">
-                    <span className="font-semibold text-white group-hover:text-purple-300 transition-colors truncate block">
-                      {srv.fullName}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">{srv.host} &bull; {srv.databasesCount} bancos</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 flex-shrink-0">
-                  <span className={`px-1.5 py-0.5 text-[9px] font-bold font-mono rounded border ${getEnvBadgeStyle(srv.environment)}`}>
-                    {srv.environment}
-                  </span>
-                  <span className="font-bold font-mono text-purple-300 bg-purple-950 px-2 py-0.5 rounded border border-purple-800">
-                    {srv.connections} conexões
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -527,9 +492,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topDbConnections} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <BarChart data={topDbConnections} margin={{ top: 25, right: 15, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="displayName" stroke="#64748b" tick={{ fontSize: 10 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 10 }} unit=" conns" />
@@ -551,6 +516,8 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                   {topDbConnections.map((entry, index) => (
                     <Cell
                       key={`db-cell-${index}`}
+                      cursor={onSelectServer ? 'pointer' : 'default'}
+                      onClick={() => onSelectServer?.(entry.serverId)}
                       fill={
                         index === 0
                           ? '#06b6d4'
@@ -564,44 +531,17 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                       }
                     />
                   ))}
+                  <LabelList
+                    dataKey="connections"
+                    position="top"
+                    fill="#67e8f9"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: any) => `${value} conns`}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Table List representation */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/80">
-            {topDbConnections.map((db, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSelectServer?.(db.serverId)}
-                className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:bg-slate-800/50 transition-colors text-xs cursor-pointer group"
-                title="Clique para acessar o servidor deste banco"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                    #{idx + 1}
-                  </span>
-                  <div className="truncate">
-                    <span className="font-bold text-white group-hover:text-cyan-300 transition-colors font-mono truncate block">
-                      {db.dbName}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono truncate block">
-                      {db.serverName} ({db.host}) &bull; {db.sizeFormatted}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 flex-shrink-0 font-mono">
-                  <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${getEnvBadgeStyle(db.environment)}`}>
-                    {db.environment}
-                  </span>
-                  <span className="font-bold px-2 py-0.5 rounded border text-xs bg-cyan-950 text-cyan-300 border-cyan-800">
-                    {db.connections} conexões
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -625,9 +565,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topTpsServers} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
+              <BarChart data={topTpsServers} layout="vertical" margin={{ top: 10, right: 75, left: 15, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                 <XAxis type="number" stroke="#64748b" tick={{ fontSize: 10 }} unit=" tps" />
                 <YAxis dataKey="name" type="category" stroke="#94a3b8" tick={{ fontSize: 11 }} width={110} />
@@ -649,6 +589,8 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                   {topTpsServers.map((entry, index) => (
                     <Cell
                       key={`tps-cell-${index}`}
+                      cursor={onSelectServer ? 'pointer' : 'default'}
+                      onClick={() => onSelectServer?.(entry.id)}
                       fill={
                         index === 0
                           ? '#10b981'
@@ -662,38 +604,17 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                       }
                     />
                   ))}
+                  <LabelList
+                    dataKey="tps"
+                    position="right"
+                    fill="#6ee7b7"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: any) => `${value} tps`}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Table List representation below chart */}
-          <div className="space-y-2 pt-2 border-t border-slate-800/80">
-            {topTpsServers.map((srv, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:bg-slate-800/50 transition-colors text-xs"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                    #{idx + 1}
-                  </span>
-                  <div className="truncate">
-                    <span className="font-semibold text-white truncate block">{srv.fullName}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">{srv.host}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 flex-shrink-0">
-                  <span className={`px-1.5 py-0.5 text-[9px] font-bold font-mono rounded border ${getEnvBadgeStyle(srv.environment)}`}>
-                    {srv.environment}
-                  </span>
-                  <span className="font-bold font-mono text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-                    {srv.tps} TPS
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -714,9 +635,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topSizeDatabases} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <BarChart data={topSizeDatabases} margin={{ top: 25, right: 15, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="dbName" stroke="#64748b" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 10 }} unit=" GB" />
@@ -734,35 +655,36 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                     return item ? `Database: ${item.dbName} (${item.serverName})` : label;
                   }}
                 />
-                <Bar dataKey="sizeGb" name="Tamanho (GB)" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="sizeGb" name="Tamanho (GB)" fill="#6366f1" radius={[8, 8, 0, 0]}>
+                  {topSizeDatabases.map((entry, index) => (
+                    <Cell
+                      key={`size-cell-${index}`}
+                      cursor={onSelectServer ? 'pointer' : 'default'}
+                      onClick={() => onSelectServer?.(entry.serverId)}
+                      fill={
+                        index === 0
+                          ? '#6366f1'
+                          : index === 1
+                          ? '#818cf8'
+                          : index === 2
+                          ? '#a5b4fc'
+                          : index === 3
+                          ? '#38bdf8'
+                          : '#22d3ee'
+                      }
+                    />
+                  ))}
+                  <LabelList
+                    dataKey="sizeGb"
+                    position="top"
+                    fill="#a5b4fc"
+                    fontSize={11}
+                    fontWeight="bold"
+                    formatter={(value: any) => `${value} GB`}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-slate-800/80">
-            {topSizeDatabases.map((db, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:bg-slate-800/50 transition-colors text-xs"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <Database className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                  <div className="truncate">
-                    <span className="font-bold text-white font-mono">{db.dbName}</span>
-                    <span className="text-[10px] text-slate-400 block truncate">Servidor: {db.serverName} ({db.host})</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2 flex-shrink-0 font-mono">
-                  <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${getEnvBadgeStyle(db.environment)}`}>
-                    {db.environment}
-                  </span>
-                  <span className="font-bold text-indigo-300 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800">
-                    {db.sizeFormatted}
-                  </span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -782,17 +704,18 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          <div className="h-52 w-full flex items-center justify-center md:col-span-1">
+          <div className="h-56 w-full flex items-center justify-center md:col-span-1">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={envPieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
+                  innerRadius={45}
+                  outerRadius={72}
                   paddingAngle={4}
                   dataKey="value"
+                  label={({ value, percent }) => `${value} (${((percent || 0) * 100).toFixed(0)}%)`}
                 >
                   {envPieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
