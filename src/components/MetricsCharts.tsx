@@ -88,7 +88,7 @@ export const MetricsCharts: React.FC<MetricsChartsProps> = ({
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
               <ReferenceLine y={80} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'Limite 80 Conexões', fill: '#f43f5e', fontSize: 10 }} />
-              <Area type="monotone" dataKey="sessions" name="Sessões Ativas" stroke="#06b6d4" fillOpacity={1} fill="url(#sessionsGradient)" strokeWidth={2.5} />
+              <Area type="monotone" dataKey="sessions" name="Sessões Ativas" stroke="#06b6d4" fillOpacity={1} fill="url(#sessionsGradient)" strokeWidth={2.5} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -122,8 +122,8 @@ export const MetricsCharts: React.FC<MetricsChartsProps> = ({
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px', color: '#f8fafc' }}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="tps" name="Transações por Segundo (TPS)" stroke="#a855f7" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="blockReads" name="Block I/O Reads (Disco)" stroke="#f43f5e" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="tps" name="Transações por Segundo (TPS)" stroke="#a855f7" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="blockReads" name="Block I/O Reads (Disco)" stroke="#f43f5e" strokeWidth={1.5} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -442,7 +442,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                     return item ? `${item.fullName} (${item.host})` : label;
                   }}
                 />
-                <Bar dataKey="connections" radius={[0, 8, 8, 0]}>
+                <Bar dataKey="connections" radius={[0, 8, 8, 0]} isAnimationActive={false}>
                   {serverConnectionsData.map((entry, index) => (
                     <Cell
                       key={`srv-conn-${index}`}
@@ -512,7 +512,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                     return item ? `${item.dbName} (${item.serverName} - ${item.host})` : label;
                   }}
                 />
-                <Bar dataKey="connections" name="Conexões Ativas" radius={[8, 8, 0, 0]}>
+                <Bar dataKey="connections" name="Conexões Ativas" radius={[8, 8, 0, 0]} isAnimationActive={false}>
                   {topDbConnections.map((entry, index) => (
                     <Cell
                       key={`db-cell-${index}`}
@@ -585,7 +585,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                     return item ? `${item.fullName} (${item.host})` : label;
                   }}
                 />
-                <Bar dataKey="tps" radius={[0, 8, 8, 0]}>
+                <Bar dataKey="tps" radius={[0, 8, 8, 0]} isAnimationActive={false}>
                   {topTpsServers.map((entry, index) => (
                     <Cell
                       key={`tps-cell-${index}`}
@@ -655,7 +655,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                     return item ? `Database: ${item.dbName} (${item.serverName})` : label;
                   }}
                 />
-                <Bar dataKey="sizeGb" name="Tamanho (GB)" fill="#6366f1" radius={[8, 8, 0, 0]}>
+                <Bar dataKey="sizeGb" name="Tamanho (GB)" fill="#6366f1" radius={[8, 8, 0, 0]} isAnimationActive={false}>
                   {topSizeDatabases.map((entry, index) => (
                     <Cell
                       key={`size-cell-${index}`}
@@ -715,6 +715,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
                   outerRadius={72}
                   paddingAngle={4}
                   dataKey="value"
+                  isAnimationActive={false}
                   label={({ value, percent }) => `${value} (${((percent || 0) * 100).toFixed(0)}%)`}
                 >
                   {envPieData.map((entry, index) => (
