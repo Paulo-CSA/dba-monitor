@@ -1,7 +1,13 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import tls from 'tls';
 import { exec } from 'child_process';
+
+// Enable TLS 1.0 support across Node.js runtime for legacy SQL Server 2008/2008 R2 support
+try {
+  tls.DEFAULT_MIN_VERSION = 'TLSv1';
+} catch {}
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { metricsEngineSingleton } from './src/services/metricsEngine';

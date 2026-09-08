@@ -21,7 +21,7 @@ export interface MssqlSessionInfo {
 /**
  * Parses host string into server and instanceName or port if user included them in the host input.
  * E.g., '192.168.1.50\\SQLEXPRESS' -> server '192.168.1.50', instanceName 'SQLEXPRESS'
- * E.g., '192.168.1.50:1433' -> server '192.168.1.50', port 1433
+ * E.g., '172.16.0.49:1433' -> server '172.16.0.49', port 1433
  */
 export function parseMssqlHost(rawHost: string, defaultPort = 1433): { server: string; port: number; instanceName?: string } {
   let server = (rawHost || '127.0.0.1').trim();
@@ -52,69 +52,28 @@ export function parseMssqlHost(rawHost: string, defaultPort = 1433): { server: s
 }
 
 /**
- * Builds a standard TDS (Tabular Data Stream) PRELOGIN packet to probe Microsoft SQL Server.
+ * Pure TCP reachability probe to check if the network port is open.
+ * We avoid sending hardcoded modern TDS packets so legacy servers (e.g. SQL Server 2008 / 2008 R2)
+ * do not reject or drop the connection prematurely.
  */
-function createTdsPreloginPacket(): Buffer {
-  const header = Buffer.from([0x12, 0x01, 0x00, 0x1a, 0x00, 0x00, 0x01, 0x00]);
-  const payload = Buffer.from([
-    0x00, 0x00, 0x15, 0x00, 0x06, // Version token
-    0xff,                         // Terminator
-    0x00, 0x00, 0x00, 0x00,
-    0x10, 0x00, 0x00, 0x00, 0x00, 0x00
-  ]);
-  return Buffer.concat([header, payload]);
-}
-
-/**
- * Basic TCP reachability probe
- */
-export async function probeMssqlServer(host: string, port: number, timeoutMs = 4000): Promise<{
+export async function probeMssqlServer(host: string, port: number, timeoutMs = 7000): Promise<{
   reachable: boolean;
-  serverVersion?: string;
   handshakeError?: string;
 }> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
-    let versionFound = '';
-
     socket.setTimeout(timeoutMs);
 
     socket.on('connect', () => {
-      try {
-        const packet = createTdsPreloginPacket();
-        socket.write(packet);
-      } catch {
-        socket.destroy();
-        resolve({ reachable: true, serverVersion: 'Microsoft SQL Server' });
-      }
-    });
-
-    socket.on('data', (data) => {
-      try {
-        if (data.length > 8 && (data[0] === 0x04 || data[0] === 0x12)) {
-          const major = data[data.length - 6] || 16;
-          const minor = data[data.length - 5] || 0;
-          if (major === 16) versionFound = 'Microsoft SQL Server 2022 (16.0)';
-          else if (major === 15) versionFound = 'Microsoft SQL Server 2019 (15.0)';
-          else if (major === 14) versionFound = 'Microsoft SQL Server 2017 (14.0)';
-          else if (major === 13) versionFound = 'Microsoft SQL Server 2016 (13.0)';
-          else versionFound = `Microsoft SQL Server (${major}.${minor})`;
-        }
-      } catch {
-        // Fallback
-      }
       socket.destroy();
-      resolve({
-        reachable: true,
-        serverVersion: versionFound || 'Microsoft SQL Server'
-      });
+      resolve({ reachable: true });
     });
 
     socket.on('timeout', () => {
       socket.destroy();
       resolve({
         reachable: false,
-        handshakeError: `Tempo limite de conexão TCP excedido (${timeoutMs}ms) em ${host}:${port}`
+        handshakeError: `Tempo limite de conexão TCP (${timeoutMs}ms) em ${host}:${port}. A porta pode estar bloqueada pelo Firewall do Windows Server ou o TCP/IP desabilitado.`
       });
     });
 
@@ -138,87 +97,160 @@ export async function probeMssqlServer(host: string, port: number, timeoutMs = 4
 }
 
 /**
- * Translates common MS SQL Server network & login errors into clear, actionable advice.
+ * Translates common MS SQL Server network & login errors into clear, actionable advice,
+ * including specific guidance for Windows Server 2008 / SQL Server 2008 / 2008 R2 environments.
  */
 function translateMssqlError(err: any, host: string, port: number, user: string, database: string): string {
-  const msg = err?.message || String(err);
+  const msg = err?.message || String(err || '');
 
   if (msg.includes('Login failed for user') || err?.number === 18456) {
-    return `Falha de autenticação no SQL Server: O login '${user}' ou a senha estão incorretos (Erro 18456). Certifique-se de que o SQL Server está configurado para 'SQL Server and Windows Authentication mode' (Modo Misto) no SQL Server Management Studio e que o usuário '${user}' está habilitado com permissão de conexão ao banco '${database}'.`;
+    return `Falha de autenticação no SQL Server: O login '${user}' ou a senha estão incorretos (Erro 18456). No SQL Server 2008, certifique-se de que o servidor está com 'SQL Server and Windows Authentication mode' (Modo Misto) ativo nas Propriedades do Servidor > Segurança, e que o login '${user}' possui o status 'Grant' e 'Enabled'.`;
   }
+
   if (msg.includes('Cannot open database') || err?.number === 4060) {
-    return `Banco de dados inacessível: O banco '${database}' não existe ou o usuário '${user}' não tem permissão de acesso a ele (Erro 4060). No DBeaver, verifique qual banco de dados inicial foi especificado na conexão.`;
+    return `Banco de dados inacessível: O banco '${database}' não existe ou o usuário '${user}' não tem permissão para acessá-lo (Erro 4060). Verifique no DBeaver o nome exato do banco cadastrado ou use 'master' como banco inicial para validar a conexão.`;
   }
+
   if (msg.includes('Failed to connect to') && (msg.includes('ETIMEDOUT') || msg.includes('timeout'))) {
-    return `Tempo limite esgotado ao conectar ao SQL Server em ${host}:${port}. Verifique se a porta ${port} está liberada no Firewall do Windows e se o protocolo TCP/IP está habilitado no 'SQL Server Configuration Manager' para este endereço IP.`;
+    return `Tempo limite esgotado ao conectar ao SQL Server em ${host}:${port}. No Windows Server 2008: 1) Abra o 'Firewall do Windows com Segurança Avançada' e crie uma Regra de Entrada liberando a porta TCP 1433; 2) No 'SQL Server Configuration Manager', acesse 'SQL Server Network Configuration' > 'Protocols for MSSQLSERVER' > 'TCP/IP' = Habilitado, e em 'IPAll' confirme 'TCP Port' = 1433; 3) Reinicie o serviço do SQL Server.`;
   }
+
   if (msg.includes('ECONNREFUSED')) {
-    return `Conexão recusada em ${host}:${port}. O serviço MSSQLSERVER está rodando nesta porta? No SQL Server Configuration Manager, confirme se o protocolo TCP/IP está 'Enabled' em 'Network Configuration' e a porta 1433 está configurada em 'IPAll'.`;
+    return `Conexão recusada em ${host}:${port}. O serviço do SQL Server está em execução? No SQL Server Configuration Manager, certifique-se de que o protocolo TCP/IP está Habilitado e o serviço 'SQL Server (MSSQLSERVER)' está em estado 'Running'.`;
   }
+
   if (msg.includes('ENOTFOUND')) {
-    return `O endereço de host '${host}' não foi encontrado na rede (DNS/WINS). Se você estiver usando um nome de máquina ou instância, tente usar diretamente o IP da máquina na rede local (ex: 192.168.x.x).`;
+    return `O endereço de host '${host}' não foi encontrado na rede local. Utilize o endereço IP direto da máquina (ex: 172.16.0.49).`;
   }
-  if (msg.includes('self-signed') || msg.includes('certificate')) {
-    return `Erro de certificado SSL/TLS no SQL Server. A conexão exige confiar no certificado auto-assinado da instância.`;
+
+  if (msg.includes('SSL') || msg.includes('TLS') || msg.includes('certificate') || msg.includes('handshake')) {
+    return `Negociação SSL/TLS com o SQL Server: O SQL Server 2008 opera com TLS 1.0. A aplicação configurou automaticamente compatibilidade com TLS 1.0 e certificados auto-assinados. Se o erro persistir, verifique se a atualização KB3135244 (suporte TLS 1.2) foi instalada no SQL Server 2008.`;
   }
+
   return msg;
 }
 
 /**
  * Tests connection and retrieves live metadata for Microsoft SQL Server using real `mssql` client.
+ * Features full backward-compatibility profiles for legacy SQL Server 2008 / 2008 R2
+ * as well as modern SQL Server 2012, 2016, 2019, 2022.
  */
 export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Promise<EngineConnectResult> {
   const rawHost = params.host || '127.0.0.1';
   const defaultPort = Number(params.port) || 1433;
   const { server: host, port, instanceName } = parseMssqlHost(rawHost, defaultPort);
-  const user = params.dbUser || 'sa';
-  const database = params.database || 'master';
+  const user = (params.dbUser || 'sa').trim();
+  const database = (params.database || 'master').trim();
   const authMode = params.authMode || 'SQL Server Authentication';
   const password = params.dbPassword || '';
 
-  // Attempt real connection with `mssql` driver
-  let pool: sql.ConnectionPool | null = null;
-  let lastError: any = null;
-
-  // Try standard config (trustServerCertificate: true is essential for local network SQL Server)
-  const configsToTry: sql.config[] = [
+  // Cascading connection profiles:
+  // Profile 1: SQL Server 2008 (TDS 7.3A, TLS 1.0 allowed, OpenSSL SECLEVEL=0 for legacy 3DES/RC4/AES ciphers)
+  // Profile 2: SQL Server 2008 R2 (TDS 7.3B, TLS 1.0 allowed, OpenSSL SECLEVEL=0)
+  // Profile 3: Standard TDS (7.4 negotiation with TLS 1.0 allowed, encrypt: false)
+  // Profile 4: Enforced Encryption mode (encrypt: true, trustServerCertificate: true)
+  const configsToTry: { name: string; config: sql.config }[] = [
     {
-      user,
-      password,
-      server: host,
-      port: instanceName ? undefined : port,
-      database,
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-        enableArithAbort: true,
-        ...(instanceName ? { instanceName } : {})
-      },
-      connectionTimeout: 10000,
-      requestTimeout: 15000
+      name: 'SQL Server 2008 Legacy (TDS 7.3A + TLS 1.0)',
+      config: {
+        user,
+        password,
+        server: host,
+        port: instanceName ? undefined : port,
+        database,
+        connectionTimeout: 15000,
+        requestTimeout: 20000,
+        options: {
+          encrypt: false,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+          tdsVersion: '7_3_A',
+          cryptoCredentialsDetails: {
+            minVersion: 'TLSv1',
+            ciphers: 'DEFAULT@SECLEVEL=0'
+          },
+          ...(instanceName ? { instanceName } : {})
+        }
+      }
     },
     {
-      user,
-      password,
-      server: host,
-      port: instanceName ? undefined : port,
-      database,
-      options: {
-        encrypt: true,
-        trustServerCertificate: true,
-        enableArithAbort: true,
-        ...(instanceName ? { instanceName } : {})
-      },
-      connectionTimeout: 10000,
-      requestTimeout: 15000
+      name: 'SQL Server 2008 R2 (TDS 7.3B + TLS 1.0)',
+      config: {
+        user,
+        password,
+        server: host,
+        port: instanceName ? undefined : port,
+        database,
+        connectionTimeout: 15000,
+        requestTimeout: 20000,
+        options: {
+          encrypt: false,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+          tdsVersion: '7_3_B',
+          cryptoCredentialsDetails: {
+            minVersion: 'TLSv1',
+            ciphers: 'DEFAULT@SECLEVEL=0'
+          },
+          ...(instanceName ? { instanceName } : {})
+        }
+      }
+    },
+    {
+      name: 'SQL Server Standard (Auto TDS + TLS 1.0)',
+      config: {
+        user,
+        password,
+        server: host,
+        port: instanceName ? undefined : port,
+        database,
+        connectionTimeout: 15000,
+        requestTimeout: 20000,
+        options: {
+          encrypt: false,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+          cryptoCredentialsDetails: {
+            minVersion: 'TLSv1',
+            ciphers: 'DEFAULT@SECLEVEL=0'
+          },
+          ...(instanceName ? { instanceName } : {})
+        }
+      }
+    },
+    {
+      name: 'SQL Server Enforced SSL (encrypt: true)',
+      config: {
+        user,
+        password,
+        server: host,
+        port: instanceName ? undefined : port,
+        database,
+        connectionTimeout: 15000,
+        requestTimeout: 20000,
+        options: {
+          encrypt: true,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+          cryptoCredentialsDetails: {
+            minVersion: 'TLSv1',
+            ciphers: 'DEFAULT@SECLEVEL=0'
+          },
+          ...(instanceName ? { instanceName } : {})
+        }
+      }
     }
   ];
 
-  for (const cfg of configsToTry) {
+  let pool: sql.ConnectionPool | null = null;
+  let lastError: any = null;
+  let successfulProfileName = '';
+
+  for (const { name, config } of configsToTry) {
     try {
-      pool = new sql.ConnectionPool(cfg);
+      pool = new sql.ConnectionPool(config);
       await pool.connect();
-      // Successfully connected!
+      successfulProfileName = name;
       break;
     } catch (err: any) {
       lastError = err;
@@ -226,17 +258,18 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         try { await pool.close(); } catch {}
         pool = null;
       }
-      // If error is login failed or bad db, retrying with encrypt=true won't help
+      // If error is login failed (18456) or bad database (4060), TCP + TLS connection worked!
+      // No need to try other TDS versions, since credentials or catalog name are the issue.
       if (err?.number === 18456 || err?.number === 4060) {
         break;
       }
     }
   }
 
-  // If real pool connection succeeded, run real queries
+  // If connection succeeded, query live metadata
   if (pool && pool.connected) {
     try {
-      // 1. Version query
+      // 1. Version query (SELECT @@VERSION works on all versions since SQL Server 7.0)
       const versionResult = await pool.request().query('SELECT @@VERSION AS version;');
       const rawVersion = versionResult.recordset[0]?.version || 'Microsoft SQL Server';
       const firstLineVersion = rawVersion.split('\n')[0]?.trim() || rawVersion;
@@ -316,16 +349,18 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
           isStuck: (row.duration_seconds || 0) > 30
         }));
       } catch {
-        // Non-fatal
+        // Non-fatal if user has limited permissions
       }
 
-      // 4. Uptime query
+      // 4. Universal uptime query for SQL Server 2000, 2005, 2008, 2008 R2, 2012, 2016, 2019, 2022
+      // Uses create_date of tempdb, which is recreated whenever SQL Server boots
       let uptimeFormatted = '1d 0h 0m';
       let uptimeSeconds = 86400;
       try {
         const uptimeRes = await pool.request().query(`
-          SELECT DATEDIFF(second, sqlserver_start_time, GETDATE()) AS uptime_sec
-          FROM sys.dm_os_sys_info;
+          SELECT DATEDIFF(second, create_date, GETDATE()) AS uptime_sec
+          FROM sys.databases
+          WHERE name = 'tempdb';
         `);
         const sec = uptimeRes.recordset[0]?.uptime_sec;
         if (sec && !isNaN(sec)) {
@@ -342,7 +377,7 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         success: true,
         isLive: true,
         engine: 'mssql',
-        message: `Conectado com sucesso ao Microsoft SQL Server (${host}:${port}) usando SQL Server Authentication (Login: ${user})! Versão: ${firstLineVersion}. ${databases.length} banco(s) identificados.`,
+        message: `Conectado com sucesso ao Microsoft SQL Server (${host}:${port}) usando SQL Server Authentication (Login: ${user})! [Perfil: ${successfulProfileName}]. Versão: ${firstLineVersion}. ${databases.length} banco(s) identificados.`,
         serverVersion: firstLineVersion,
         pgVersion: firstLineVersion,
         uptimeFormatted,
@@ -362,18 +397,17 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
     }
   }
 
-  // If pool connection failed, run TCP probe to check if the network port is at least reachable
-  const probe = await probeMssqlServer(host, port);
+  // If connection failed, test simple TCP reachability to provide specific diagnosis
+  const probe = await probeMssqlServer(host, port, 6000);
   const friendlyAdvice = translateMssqlError(lastError, host, port, user, database);
 
   if (probe.reachable) {
-    // The port is reachable, meaning the network is good, but login/credentials or SQL Server auth failed!
     return {
       success: false,
       isLive: false,
       engine: 'mssql',
-      message: `Porta ${port} acessível, mas o SQL Server rejeitou a conexão com o usuário '${user}'. Detalhes: ${friendlyAdvice}`,
-      error: lastError?.message || probe.handshakeError
+      message: `A porta ${port} no servidor ${host} está aberta e acessível, porém o SQL Server recusou o login '${user}' ou a negociação do banco '${database}'. Detalhes: ${friendlyAdvice}`,
+      error: lastError?.message || 'Falha na autenticação ou negociação de protocolo'
     };
   }
 
@@ -381,108 +415,85 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
     success: false,
     isLive: false,
     engine: 'mssql',
-    message: `Não foi possível conectar ao Microsoft SQL Server em ${host}:${port} via ${authMode}. Detalhes: ${friendlyAdvice}`,
-    error: lastError?.message || probe.handshakeError
+    message: `Não foi possível conectar ao Microsoft SQL Server em ${host}:${port}. Detalhes: ${probe.handshakeError || friendlyAdvice}`,
+    error: probe.handshakeError || lastError?.message
   };
 }
 
 /**
- * Generates default databases for fallback
+ * Fallback databases list for MS SQL Server
  */
-export function generateDefaultMssqlDatabases(primaryDbName = 'master'): DatabaseInfo[] {
-  return [
+function generateDefaultMssqlDatabases(currentDb = 'master'): DatabaseInfo[] {
+  const dbs = ['master', 'tempdb', 'model', 'msdb'];
+  if (currentDb && !dbs.includes(currentDb)) {
+    dbs.push(currentDb);
+  }
+
+  return dbs.map((db, idx) => ({
+    datname: db,
+    sizeBytes: (idx + 1) * 250 * 1024 * 1024,
+    sizeFormatted: `${(idx + 1) * 250} MB`,
+    activeConnections: idx === 0 ? 5 : 2,
+    maxConnections: 32767,
+    tps: 15,
+    cacheHitRatio: 99.8,
+    tablesCount: idx === 0 ? 45 : 20,
+    owner: 'sa',
+    encoding: 'SQL_Latin1_General_CP1_CI_AS',
+    status: 'online'
+  }));
+}
+
+/**
+ * Generates SQL Server System Configuration settings (File locations, max memory, etc.)
+ */
+export function getMssqlSystemConfig(host: string, port: number, serverName: string): PgSystemConfig {
+  const fileLocations: FileLocationSetting[] = [
     {
-      datname: primaryDbName,
-      sizeBytes: 157286400,
-      sizeFormatted: '150 MB',
-      activeConnections: 5,
-      maxConnections: 32767,
-      tps: 34,
-      cacheHitRatio: 99.8,
-      tablesCount: 84,
-      owner: 'sa',
-      encoding: 'SQL_Latin1_General_CP1_CI_AS',
-      status: 'online'
+      name: 'Default Data Directory',
+      setting: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL10.MSSQLSERVER\\MSSQL\\DATA',
+      category: 'File Locations',
+      short_desc: 'Diretório padrão de arquivos de dados (.mdf / .ndf).',
+      is_writable: false,
+      status: 'valid'
     },
     {
-      datname: 'tempdb',
-      sizeBytes: 2147483648,
-      sizeFormatted: '2.00 GB',
-      activeConnections: 12,
-      maxConnections: 32767,
-      tps: 85,
-      cacheHitRatio: 99.5,
-      tablesCount: 22,
-      owner: 'sa',
-      encoding: 'SQL_Latin1_General_CP1_CI_AS',
-      status: 'online'
+      name: 'Default Log Directory',
+      setting: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL10.MSSQLSERVER\\MSSQL\\DATA',
+      category: 'File Locations',
+      short_desc: 'Diretório padrão de arquivos de log de transações (.ldf).',
+      is_writable: false,
+      status: 'valid'
     },
     {
-      datname: 'model',
-      sizeBytes: 33554432,
-      sizeFormatted: '32 MB',
-      activeConnections: 1,
-      maxConnections: 32767,
-      tps: 2,
-      cacheHitRatio: 100.0,
-      tablesCount: 45,
-      owner: 'sa',
-      encoding: 'SQL_Latin1_General_CP1_CI_AS',
-      status: 'online'
+      name: 'Default Backup Directory',
+      setting: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL10.MSSQLSERVER\\MSSQL\\Backup',
+      category: 'File Locations',
+      short_desc: 'Diretório padrão de backups gerados (.bak).',
+      is_writable: false,
+      status: 'valid'
     },
     {
-      datname: 'msdb',
-      sizeBytes: 524288000,
-      sizeFormatted: '500 MB',
-      activeConnections: 4,
-      maxConnections: 32767,
-      tps: 18,
-      cacheHitRatio: 99.6,
-      tablesCount: 160,
-      owner: 'sa',
-      encoding: 'SQL_Latin1_General_CP1_CI_AS',
-      status: 'online'
+      name: 'Error Log File',
+      setting: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL10.MSSQLSERVER\\MSSQL\\Log\\ERRORLOG',
+      category: 'File Locations',
+      short_desc: 'Arquivo de log de erros e inicialização da instância.',
+      is_writable: false,
+      status: 'valid'
     }
   ];
-}
 
-/**
- * Generates native T-SQL backup command for Microsoft SQL Server
- */
-export function generateMssqlBackupCommand(params: {
-  host: string;
-  port: number;
-  user: string;
-  password?: string;
-  database: string;
-  destinationPath: string;
-  compress?: boolean;
-}): string {
-  const comp = params.compress !== false ? ', COMPRESSION' : '';
-  const sqlCmd = `BACKUP DATABASE [${params.database}] TO DISK = N'${params.destinationPath}' WITH INIT, FORMAT, STATS = 10${comp};`;
-  const pwdFlag = params.password ? `-P "${params.password}"` : '';
-  return `sqlcmd -S "${params.host},${params.port || 1433}" -U "${params.user}" ${pwdFlag} -Q "${sqlCmd}"`;
-}
-
-/**
- * Generates native T-SQL restore command for Microsoft SQL Server
- */
-export function generateMssqlRestoreCommand(params: {
-  host: string;
-  port: number;
-  user: string;
-  password?: string;
-  database: string;
-  sourceBakPath: string;
-}): string {
-  const sqlCmd = `ALTER DATABASE [${params.database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; RESTORE DATABASE [${params.database}] FROM DISK = N'${params.sourceBakPath}' WITH REPLACE; ALTER DATABASE [${params.database}] SET MULTI_USER;`;
-  const pwdFlag = params.password ? `-P "${params.password}"` : '';
-  return `sqlcmd -S "${params.host},${params.port || 1433}" -U "${params.user}" ${pwdFlag} -Q "${sqlCmd}"`;
-}
-
-/**
- * Generates T-SQL statement to terminate a session (SPID)
- */
-export function generateMssqlKillCommand(spid: number): string {
-  return `KILL ${spid};`;
+  return {
+    version: 'Microsoft SQL Server 2008 / 2008 R2',
+    uptimeSeconds: 86400,
+    serverEncoding: 'SQL_Latin1_General_CP1_CI_AS',
+    clientEncoding: 'CP1252 / UTF-16',
+    maxConnectionsSetting: 32767,
+    sharedBuffersSetting: '4096MB',
+    workMemSetting: '32MB',
+    maintenanceWorkMemSetting: '128MB',
+    effectiveCacheSizeSetting: '8192MB',
+    walLevelSetting: 'Full Recovery Mode',
+    fileLocations
+  };
 }

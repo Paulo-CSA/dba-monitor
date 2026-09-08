@@ -312,6 +312,16 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
+          {engine === 'mssql' && (
+            <div className="p-2.5 bg-amber-950/30 rounded-xl border border-amber-800/50 text-[11px] text-amber-200/95 flex items-start space-x-2">
+              <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-amber-300 block">Compatibilidade com SQL Server 2008 / 2008 R2 ativa:</span>
+                <span>O sistema negocia automaticamente TLS 1.0 (ciphers legados OpenSSL SECLEVEL=0) e protocolos TDS 7.3A/7.3B com trustServerCertificate para instâncias legadas no Windows Server 2008.</span>
+              </div>
+            </div>
+          )}
+
           {/* Nome de Identificação do Servidor */}
           <div>
             <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
