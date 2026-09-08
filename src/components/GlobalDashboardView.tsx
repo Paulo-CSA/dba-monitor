@@ -97,7 +97,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
           </div>
           <h2 className="text-xl font-bold text-white">Nenhum Servidor Cadastrado</h2>
           <p className="text-sm text-slate-400 max-w-md mx-auto">
-            Adicione seu primeiro servidor para que a aplicação realize a consulta via SQL do <code>SELECT version();</code> e recupere automaticamente os bancos de dados cadastrados.
+            Adicione seu primeiro servidor para que a aplicação realize a consulta e recupere automaticamente os bancos de dados cadastrados.
           </p>
           <div className="pt-2">
             <button
