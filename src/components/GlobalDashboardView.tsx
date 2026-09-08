@@ -95,9 +95,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
           <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
             <Server className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white">Nenhum Servidor PostgreSQL Cadastrado</h2>
+          <h2 className="text-xl font-bold text-white">Nenhum Servidor Cadastrado</h2>
           <p className="text-sm text-slate-400 max-w-md mx-auto">
-            Adicione seu primeiro servidor PostgreSQL para que a aplicação realize a consulta via SQL do <code>SELECT version();</code> e recupere automaticamente os bancos de dados cadastrados.
+            Adicione seu primeiro servidor para que a aplicação realize a consulta via SQL do <code>SELECT version();</code> e recupere automaticamente os bancos de dados cadastrados.
           </p>
           <div className="pt-2">
             <button
@@ -105,7 +105,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
               className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors cursor-pointer inline-flex items-center space-x-2"
             >
               <Server className="w-4 h-4" />
-              <span>Adicionar Servidor PostgreSQL</span>
+              <span>Adicionar Servidor</span>
             </button>
           </div>
         </div>

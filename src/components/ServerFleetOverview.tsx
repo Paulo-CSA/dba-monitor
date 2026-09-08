@@ -27,7 +27,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
         <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center mx-auto">
           <Server className="w-8 h-8" />
         </div>
-        <h2 className="text-base font-bold text-white">Nenhum Servidor PostgreSQL Cadastrado</h2>
+        <h2 className="text-base font-bold text-white">Nenhum Servidor Cadastrado</h2>
         <p className="text-xs text-slate-400">
           Você não possui servidores de banco de dados na frota. Adicione um servidor para ver seus bancos de dados e telemetria.
         </p>
@@ -57,7 +57,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
         <div>
           <h2 className="text-base font-bold text-white flex items-center space-x-2">
             <Server className="w-5 h-5 text-cyan-400" />
-            <span>Frota de Servidores PostgreSQL Monitorados ({servers.length})</span>
+            <span>Frota de Servidores Monitorados ({servers.length})</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             Identificação de múltiplos clusters, hosts e mapeamento dos bancos de dados ativos
