@@ -37,7 +37,7 @@ export const StuckQueriesTable: React.FC<StuckQueriesTableProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <ShieldAlert className="w-5 h-5 text-rose-400" />
-            <h2 className="text-base font-bold text-white">Consultas Lentas e Transações (`pg_stat_activity`)</h2>
+            <h2 className="text-base font-bold text-white">Consultas Lentas e Transações</h2>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             Sessões PostgreSQL ativas executando há mais tempo que o esperado ou retendo locks de tabela.

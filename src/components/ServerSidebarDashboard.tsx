@@ -520,7 +520,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                 }`}
               >
                 <Clock className="w-4 h-4" />
-                <span>Sessões e Locks (`pg_stat_activity`)</span>
+                <span>Sessões e Locks</span>
               </button>
             </div>
 
