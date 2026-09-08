@@ -132,6 +132,26 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                       {srv.environment}
                     </span>
 
+                    {srv.engine === 'mssql' ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-red-950 text-red-300 border border-red-800">
+                        MS SQL
+                      </span>
+                    ) : srv.engine === 'mysql' ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-orange-950 text-orange-300 border border-orange-800">
+                        MySQL
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-sky-950 text-sky-300 border border-sky-800">
+                        PG
+                      </span>
+                    )}
+
+                    {srv.engine === 'mssql' && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-red-950/60 text-red-300 border border-red-900">
+                        SQL Server Auth
+                      </span>
+                    )}
+
                     {hasAlert && (
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase bg-orange-900 text-orange-200 border border-orange-600 flex items-center space-x-1">
                         <AlertTriangle className="w-2.5 h-2.5 text-orange-400" />

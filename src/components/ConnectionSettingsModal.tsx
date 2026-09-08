@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers } from 'lucide-react';
+import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck } from 'lucide-react';
 import { DatabaseInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
 import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
@@ -14,6 +14,7 @@ interface ConnectionSettingsModalProps {
     password?: string;
     database?: string;
     engine?: DatabaseEngineType;
+    authMode?: string;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -35,6 +36,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   onSaveServer
 }) => {
   const [engine, setEngine] = useState<DatabaseEngineType>('postgres');
+  const [authMode, setAuthMode] = useState<string>('Nativa (SCRAM-SHA-256 / MD5)');
   const [serverName, setServerName] = useState('Servidor PostgreSQL');
   const [host, setHost] = useState('192.168.1.100');
   const [port, setPort] = useState(5432);
@@ -66,6 +68,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     const meta = DATABASE_ENGINES[selectedEngine];
     setPort(meta.defaultPort);
     setUser(meta.defaultUser);
+    setAuthMode(meta.defaultAuthMode);
 
     // Update server name if it's currently a default
     if (serverName === 'Servidor PostgreSQL' || serverName === 'Servidor MySQL' || serverName === 'Servidor Microsoft SQL Server' || !serverName) {
@@ -87,7 +90,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           dbUser: user,
           dbPassword: password,
           database: defaultDb,
-          engine
+          engine,
+          authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode
         })
       });
       const data = await res.json();
@@ -212,6 +216,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         password,
         database: primaryDb,
         engine,
+        authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode,
         pgVersion: versionStr || DATABASE_ENGINES[engine].name,
         uptimeFormatted,
         uptimeSeconds,
@@ -330,33 +335,65 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
+          {/* Modo de Autenticação */}
+          {engine === 'mssql' ? (
+            <div className="p-3 bg-red-950/40 rounded-xl border border-red-800/60 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 text-xs font-bold text-red-300">
+                  <ShieldCheck className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>Modo de Autenticação: SQL Server Authentication</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-200 border border-red-500/40">
+                  SQL Server Auth
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                A conexão utiliza o método <strong className="text-white">SQL Server Authentication</strong> (login nativo do SQL Server como <code className="text-red-300 font-mono">sa</code> ou login criado com senha). É necessário informar a senha do login SQL.
+              </p>
+            </div>
+          ) : (
+            <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]">
+              <div className="flex items-center space-x-1.5 text-slate-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                <span>Autenticação:</span>
+                <span className="text-slate-200 font-medium">{selectedEngineMeta.authModeLabel}</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">Padrão do SGBD</span>
+            </div>
+          )}
+
           {/* Usuário e Senha do Banco */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
                 <User className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Usuário do Banco</span>
+                <span>{engine === 'mssql' ? 'Login SQL (Usuário)' : 'Usuário do Banco'}</span>
               </label>
               <input
                 type="text"
                 value={user}
                 onChange={(e) => setUser(e.target.value)}
-                placeholder="postgres"
+                placeholder={engine === 'mssql' ? 'sa' : (engine === 'mysql' ? 'root' : 'postgres')}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
-                <Key className="w-3.5 h-3.5 text-amber-400" />
-                <span>Senha do Banco</span>
+              <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                <span className="flex items-center space-x-1">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{engine === 'mssql' ? 'Senha do Login SQL' : 'Senha do Banco'}</span>
+                </span>
+                {engine === 'mssql' && (
+                  <span className="text-[10px] text-red-400 font-mono font-medium">*obrigatória</span>
+                )}
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={engine === 'mssql' ? 'Senha do usuário sa/SQL' : '••••••••'}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-3 pr-8 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 />
                 <button

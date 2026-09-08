@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ServerInstance } from '../types/serverFleet';
-import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 interface EditServerModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         host: server.host,
         port: server.port,
         engine: server.engine || 'postgres',
+        authMode: server.authMode || (server.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
         dbUser: server.dbUser || 'postgres',
         dbPassword: server.dbPassword || '',
         environment: server.environment,
@@ -48,6 +49,8 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
     setIsRequerying(true);
     setQueryMessage(null);
     try {
+      const activeEngine = formData.engine || server.engine || 'postgres';
+      const defaultDb = activeEngine === 'mssql' ? 'master' : (activeEngine === 'mysql' ? 'mysql' : 'postgres');
       const res = await fetch('/api/db/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,15 +59,17 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
           port: Number(formData.port) || server.port,
           dbUser: formData.dbUser || server.dbUser || 'postgres',
           dbPassword: formData.dbPassword || server.dbPassword || '',
-          database: 'postgres'
+          database: defaultDb,
+          engine: activeEngine,
+          authMode: activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined
         })
       });
       const data = await res.json();
       setIsRequerying(false);
 
       if (data.success && data.isLive) {
-        if (data.pgVersion) {
-          setFormData((prev) => ({ ...prev, pgVersion: data.pgVersion }));
+        if (data.pgVersion || data.serverVersion) {
+          setFormData((prev) => ({ ...prev, pgVersion: data.serverVersion || data.pgVersion }));
         }
         if (data.databases && data.databases.length > 0) {
           server.databases = data.databases;
@@ -79,7 +84,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         if (data.maxConnections) server.maxConnections = data.maxConnections;
         if (data.ramTotalMb) server.ramTotalMb = data.ramTotalMb;
 
-        setQueryMessage(`Consulta efetuada! Versão: ${data.pgVersion}. Uptime: ${data.uptimeFormatted || 'OK'}. Shared Buffers: ${data.sharedBuffers || '128MB'}.`);
+        setQueryMessage(`Consulta efetuada! Versão: ${data.serverVersion || data.pgVersion}. Uptime: ${data.uptimeFormatted || 'OK'}.`);
       } else {
         setQueryMessage(`Servidor consultado via SQL. Mantido ${server.databases.length} bancos identificados.`);
       }
@@ -93,12 +98,15 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
     e.preventDefault();
     if (!server) return;
 
+    const activeEngine = formData.engine || server.engine || 'postgres';
+
     const updated: ServerInstance = {
       ...server,
       name: formData.name || server.name,
       host: formData.host || server.host,
       port: Number(formData.port) || server.port,
-      engine: formData.engine || server.engine || 'postgres',
+      engine: activeEngine,
+      authMode: formData.authMode || (activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined),
       dbUser: formData.dbUser || 'postgres',
       dbPassword: formData.dbPassword || '',
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
@@ -186,27 +194,45 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
             </div>
           </div>
 
+          {/* Modo de Autenticação para MS SQL */}
+          {(formData.engine || server.engine) === 'mssql' && (
+            <div className="p-2.5 bg-red-950/40 rounded-xl border border-red-800/60 flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-1.5 text-red-300">
+                <ShieldCheck className="w-4 h-4 text-red-400 flex-shrink-0" />
+                <span className="font-semibold">Autenticação: SQL Server Authentication</span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-200 border border-red-500/40">
+                Login SQL + Senha
+              </span>
+            </div>
+          )}
+
           {/* Usuário e Senha de Login no Banco */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center space-x-1">
                 <User className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Usuário do Banco</span>
+                <span>{(formData.engine || server.engine) === 'mssql' ? 'Login SQL (sa/usuário)' : 'Usuário do Banco'}</span>
               </label>
               <input
                 type="text"
                 required
                 value={formData.dbUser || ''}
                 onChange={(e) => setFormData({ ...formData, dbUser: e.target.value })}
-                placeholder="postgres"
+                placeholder={(formData.engine || server.engine) === 'mssql' ? 'sa' : 'postgres'}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center space-x-1">
-                <Key className="w-3.5 h-3.5 text-amber-400" />
-                <span>Senha do Banco</span>
+              <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center justify-between">
+                <span className="flex items-center space-x-1">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{(formData.engine || server.engine) === 'mssql' ? 'Senha do Login SQL' : 'Senha do Banco'}</span>
+                </span>
+                {(formData.engine || server.engine) === 'mssql' && (
+                  <span className="text-[10px] text-red-400 font-mono font-medium">*obrigatória</span>
+                )}
               </label>
               <div className="relative">
                 <input

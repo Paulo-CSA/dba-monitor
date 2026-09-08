@@ -729,6 +729,7 @@ export default function App() {
     password?: string;
     database?: string;
     engine?: 'postgres' | 'mysql' | 'mssql';
+    authMode?: string;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -761,6 +762,7 @@ export default function App() {
       host: serverData.host || '127.0.0.1',
       port: serverData.port || 5432,
       engine: serverData.engine || 'postgres',
+      authMode: serverData.authMode || (serverData.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
       environment: serverData.environment || 'Produção',

@@ -75,14 +75,15 @@ async function startServer() {
 
   // Test connection to live database endpoint (PostgreSQL, MySQL, Microsoft SQL Server)
   app.post('/api/db/test-connection', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, engine } = req.body;
+    const { host, port, dbUser, dbPassword, database, engine, authMode } = req.body;
     const result = await dispatchTestConnection({
       host,
       port: Number(port) || (engine === 'mysql' ? 3306 : engine === 'mssql' ? 1433 : 5432),
       dbUser,
       dbPassword,
       database,
-      engine: engine || 'postgres'
+      engine: engine || 'postgres',
+      authMode: authMode || (engine === 'mssql' ? 'SQL Server Authentication' : undefined)
     });
     res.json(result);
   });

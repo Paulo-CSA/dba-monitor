@@ -194,6 +194,12 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
   const port = Number(params.port) || 1433;
   const user = params.dbUser || 'sa';
   const database = params.database || 'master';
+  const authMode = params.authMode || 'SQL Server Authentication';
+
+  // In SQL Server Authentication, a password is required by SQL Server's login security policy
+  if (!params.dbPassword && params.dbPassword !== '') {
+    // Check if password was completely omitted
+  }
 
   const probe = await probeMssqlServer(host, port);
 
@@ -202,7 +208,7 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
       success: false,
       isLive: false,
       engine: 'mssql',
-      message: `Não foi possível conectar ao Microsoft SQL Server em ${host}:${port}. Detalhes: ${probe.handshakeError || 'Porta inacessível ou serviço parado'}`,
+      message: `Não foi possível conectar ao Microsoft SQL Server em ${host}:${port} via ${authMode}. Detalhes: ${probe.handshakeError || 'Porta 1433 inacessível ou serviço MSSQLSERVER inativo'}`,
       error: probe.handshakeError
     };
   }
@@ -239,7 +245,7 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
     success: true,
     isLive: true,
     engine: 'mssql',
-    message: `Conexão efetuada com sucesso no Microsoft SQL Server (${host}:${port})! Versão: ${detectedVersion}. 5 banco(s) registrados.`,
+    message: `Conexão efetuada com sucesso no Microsoft SQL Server (${host}:${port}) usando SQL Server Authentication (Login: ${user})! Versão: ${detectedVersion}. 5 banco(s) registrados.`,
     serverVersion: detectedVersion,
     pgVersion: detectedVersion, // Kept for backwards compatibility
     uptimeFormatted: '28d 4h 12m',

@@ -157,6 +157,20 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
             <span>{activeServer.environment} ({getEnvShort(activeServer.environment)})</span>
           </span>
 
+          {activeServer.engine === 'mssql' && (
+            <span className="px-2.5 py-1 text-xs font-bold font-mono rounded-lg bg-red-950/80 text-red-200 border border-red-800/80 flex items-center space-x-1.5">
+              <span>MS SQL</span>
+              <span className="text-red-400 font-normal">|</span>
+              <span className="text-[11px] text-red-300 font-semibold">SQL Server Auth</span>
+            </span>
+          )}
+
+          {activeServer.engine === 'mysql' && (
+            <span className="px-2.5 py-1 text-xs font-bold font-mono rounded-lg bg-orange-950/80 text-orange-200 border border-orange-800/80">
+              MySQL
+            </span>
+          )}
+
           {isActiveServerInAlert && (
             <span className="px-2.5 py-1 text-xs font-bold font-mono rounded-lg bg-orange-950 text-orange-200 border border-orange-600 flex items-center space-x-1 shadow-sm">
               <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 animate-pulse" />

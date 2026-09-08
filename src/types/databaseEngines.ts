@@ -11,6 +11,9 @@ export interface DatabaseEngineMetadata {
   defaultPort: number;
   defaultUser: string;
   defaultDatabase: string;
+  defaultAuthMode: string;
+  authModeLabel: string;
+  authDescription: string;
   defaultVersionQuery: string;
   databasesCatalogQuery: string;
   processesQuery: string;
@@ -29,6 +32,9 @@ export const DATABASE_ENGINES: Record<DatabaseEngineType, DatabaseEngineMetadata
     defaultPort: 5432,
     defaultUser: 'postgres',
     defaultDatabase: 'postgres',
+    defaultAuthMode: 'SCRAM-SHA-256 / MD5',
+    authModeLabel: 'Autenticação Nativa PostgreSQL',
+    authDescription: 'Credenciais de usuário e senha salvas no catálogo interno (pg_authid).',
     defaultVersionQuery: 'SELECT version();',
     databasesCatalogQuery: 'SELECT datname FROM pg_database WHERE datistemplate = false;',
     processesQuery: 'SELECT * FROM pg_stat_activity;',
@@ -45,6 +51,9 @@ export const DATABASE_ENGINES: Record<DatabaseEngineType, DatabaseEngineMetadata
     defaultPort: 3306,
     defaultUser: 'root',
     defaultDatabase: 'mysql',
+    defaultAuthMode: 'caching_sha2_password / mysql_native',
+    authModeLabel: 'Autenticação Nativa MySQL',
+    authDescription: 'Credenciais de usuário e senha da tabela mysql.user.',
     defaultVersionQuery: 'SELECT VERSION();',
     databasesCatalogQuery: 'SHOW DATABASES;',
     processesQuery: 'SHOW FULL PROCESSLIST;',
@@ -61,6 +70,9 @@ export const DATABASE_ENGINES: Record<DatabaseEngineType, DatabaseEngineMetadata
     defaultPort: 1433,
     defaultUser: 'sa',
     defaultDatabase: 'master',
+    defaultAuthMode: 'SQL Server Authentication',
+    authModeLabel: 'SQL Server Authentication (Login SQL e Senha)',
+    authDescription: 'Autenticação direta com login e senha do SQL Server (Modo Misto / SQL Server Authentication com login sa ou criado na instância).',
     defaultVersionQuery: 'SELECT @@VERSION;',
     databasesCatalogQuery: 'SELECT name FROM sys.databases WHERE state = 0;',
     processesQuery: 'SELECT * FROM sys.dm_exec_sessions;',
@@ -79,6 +91,7 @@ export interface EngineConnectParams {
   dbPassword?: string;
   database?: string;
   engine?: DatabaseEngineType;
+  authMode?: string;
 }
 
 export interface EngineConnectResult {
