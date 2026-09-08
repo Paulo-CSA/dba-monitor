@@ -20,6 +20,7 @@ export interface ServerInstance {
   name: string;
   host: string;
   port: number;
+  engine?: 'postgres' | 'mysql' | 'mssql';
   environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;

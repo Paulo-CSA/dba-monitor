@@ -13,6 +13,7 @@ import { alertEngineSingleton } from './src/services/alertEngine';
 import { mockServerFleet } from './src/services/fleetService';
 import pg from 'pg';
 import { testAndFetchLivePgData, fetchLiveConnectionsForDb } from './src/services/pgLiveService';
+import { dispatchTestConnection } from './src/services/engineDispatcher';
 import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
@@ -72,15 +73,16 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Test connection to live PostgreSQL database endpoint
+  // Test connection to live database endpoint (PostgreSQL, MySQL, Microsoft SQL Server)
   app.post('/api/db/test-connection', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database } = req.body;
-    const result = await testAndFetchLivePgData({
+    const { host, port, dbUser, dbPassword, database, engine } = req.body;
+    const result = await dispatchTestConnection({
       host,
-      port: Number(port) || 5432,
+      port: Number(port) || (engine === 'mysql' ? 3306 : engine === 'mssql' ? 1433 : 5432),
       dbUser,
       dbPassword,
-      database
+      database,
+      engine: engine || 'postgres'
     });
     res.json(result);
   });

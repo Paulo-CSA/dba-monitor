@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers } from 'lucide-react';
 import { DatabaseInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
+import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
 
 interface ConnectionSettingsModalProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface ConnectionSettingsModalProps {
     user: string;
     password?: string;
     database?: string;
+    engine?: DatabaseEngineType;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -32,6 +34,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   onClose,
   onSaveServer
 }) => {
+  const [engine, setEngine] = useState<DatabaseEngineType>('postgres');
   const [serverName, setServerName] = useState('Servidor PostgreSQL');
   const [host, setHost] = useState('192.168.1.100');
   const [port, setPort] = useState(5432);
@@ -57,10 +60,24 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     liveFileLocations?: FileLocationSetting[];
   } | null>(null);
 
+  const handleEngineChange = (selectedEngine: DatabaseEngineType) => {
+    setEngine(selectedEngine);
+    setTestStatus(null);
+    const meta = DATABASE_ENGINES[selectedEngine];
+    setPort(meta.defaultPort);
+    setUser(meta.defaultUser);
+
+    // Update server name if it's currently a default
+    if (serverName === 'Servidor PostgreSQL' || serverName === 'Servidor MySQL' || serverName === 'Servidor Microsoft SQL Server' || !serverName) {
+      setServerName(`Servidor ${meta.name}`);
+    }
+  };
+
   const performAutoQuery = async () => {
     setIsTesting(true);
     setTestStatus(null);
     try {
+      const defaultDb = engine === 'mssql' ? 'master' : (engine === 'mysql' ? 'mysql' : 'postgres');
       const res = await fetch('/api/db/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,7 +86,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           port,
           dbUser: user,
           dbPassword: password,
-          database: 'postgres'
+          database: defaultDb,
+          engine
         })
       });
       const data = await res.json();
@@ -77,7 +95,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
       if (data.success && data.isLive) {
         const detectedDbs: DatabaseInfo[] = data.databases || [];
-        const versionStr = data.pgVersion || 'PostgreSQL';
+        const versionStr = data.serverVersion || data.pgVersion || DATABASE_ENGINES[engine].name;
         const fileLocs: FileLocationSetting[] = data.sysConfig?.fileLocations || [];
         const uptimeFormatted = data.uptimeFormatted || '0d 0h 0m';
         const uptimeSeconds = data.uptimeSeconds || 86400;
@@ -90,7 +108,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
         setTestStatus({
           success: true,
-          message: `Conexão efetuada com sucesso! Versão: ${versionStr}. Uptime: ${uptimeFormatted}. ${detectedDbs.length} banco(s) identificados.`,
+          message: data.message || `Conexão efetuada com sucesso! Versão: ${versionStr}. ${detectedDbs.length} banco(s) identificados.`,
           pgVersion: versionStr,
           uptimeFormatted,
           uptimeSeconds,
@@ -120,7 +138,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           fileLocations: fileLocs
         };
       } else {
-        const errMsg = data.message || data.error || 'Não foi possível conectar ao servidor PostgreSQL informado. Verifique Host, Porta e Credenciais.';
+        const errMsg = data.message || data.error || `Não foi possível conectar ao servidor ${DATABASE_ENGINES[engine].name} informado. Verifique Host, Porta e Credenciais.`;
         setTestStatus({
           success: false,
           message: errMsg,
@@ -181,7 +199,9 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
       return; // Cannot save invalid/unreachable server
     }
 
-    const primaryDb = databases && databases.length > 0 ? databases[0].datname : 'postgres';
+    const primaryDb = databases && databases.length > 0
+      ? databases[0].datname
+      : (engine === 'mssql' ? 'master' : (engine === 'mysql' ? 'mysql' : 'postgres'));
 
     if (onSaveServer) {
       onSaveServer({
@@ -191,7 +211,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         user,
         password,
         database: primaryDb,
-        pgVersion: versionStr || 'PostgreSQL',
+        engine,
+        pgVersion: versionStr || DATABASE_ENGINES[engine].name,
         uptimeFormatted,
         uptimeSeconds,
         sharedBuffers,
@@ -210,18 +231,20 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     }
   };
 
+  const selectedEngineMeta = DATABASE_ENGINES[engine];
+
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+            <div className={`p-2 rounded-xl ${selectedEngineMeta.badgeBg} ${selectedEngineMeta.badgeText}`}>
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Adicionar Novo Servidor PostgreSQL</h2>
-              <p className="text-xs text-slate-400">Informe apenas os dados de acesso do servidor</p>
+              <h2 className="text-base font-bold text-white">Adicionar Servidor ({selectedEngineMeta.name})</h2>
+              <p className="text-xs text-slate-400">Escolha o SGBD e informe as credenciais de rede</p>
             </div>
           </div>
 
@@ -235,6 +258,42 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 
         {/* Modal Form */}
         <div className="p-5 space-y-4 text-xs">
+          {/* Seleção do Tipo de Banco de Dados */}
+          <div className="space-y-1.5">
+            <label className="block text-slate-300 font-semibold flex items-center space-x-1.5">
+              <Database className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Tipo de Banco de Dados (SGBD)</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(DATABASE_ENGINES) as DatabaseEngineType[]).map((engKey) => {
+                const item = DATABASE_ENGINES[engKey];
+                const isSelected = engine === engKey;
+                return (
+                  <button
+                    key={engKey}
+                    type="button"
+                    onClick={() => handleEngineChange(engKey)}
+                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                      isSelected
+                        ? `${item.badgeBg} ${item.badgeBorder} text-white shadow-sm ring-1 ring-cyan-500/40`
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <span className="font-bold text-xs">{item.shortName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                        isSelected ? item.badgeText : 'text-slate-500'
+                      }`}>
+                        :{item.defaultPort}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 truncate">{item.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Nome do Servidor */}
           <div>
             <label className="block text-slate-300 font-semibold mb-1">Nome do Servidor</label>
@@ -242,7 +301,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               type="text"
               value={serverName}
               onChange={(e) => setServerName(e.target.value)}
-              placeholder="Ex: Servidor Principal PostgreSQL"
+              placeholder={`Ex: Servidor Principal ${selectedEngineMeta.name}`}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
@@ -329,10 +388,10 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           <div className="p-3 bg-cyan-950/40 rounded-xl border border-cyan-800/60 space-y-1 text-[11px] text-cyan-200">
             <div className="flex items-center space-x-1.5 font-bold text-cyan-300">
               <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-              <span>Consulta Automática de Versão e Bancos</span>
+              <span>Consulta Automática de Versão e Bancos ({selectedEngineMeta.name})</span>
             </div>
             <p className="text-slate-300">
-              A aplicação executará <code>SELECT version();</code> e consultará a tabela de sistema <code>pg_database</code> para identificar a versão exata do PostgreSQL e registrar automaticamente todos os bancos de dados do servidor.
+              A aplicação executará <code className="text-cyan-300 font-mono">{selectedEngineMeta.defaultVersionQuery}</code> e consultará o catálogo <code className="text-cyan-300 font-mono">{selectedEngineMeta.databasesCatalogQuery}</code> para identificar a versão exata do {selectedEngineMeta.name} e registrar os bancos de dados.
             </p>
           </div>
 
