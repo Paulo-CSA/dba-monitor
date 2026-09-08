@@ -301,26 +301,9 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
-          /*{ Dica comparativa com DBeaver }
-          <div className="p-3 bg-blue-950/30 rounded-xl border border-blue-800/40 text-[11px] text-blue-200 flex items-start space-x-2.5">
-            <HelpCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="font-bold text-blue-300 block">Dica para conexão na mesma rede local (DBeaver):</span>
-              <p className="text-slate-300">
-                Se você já conectou pelo <strong>DBeaver</strong> no mesmo servidor, utilize <strong>exatamente o mesmo Host/IP, Porta, Usuário, Senha e Banco de Dados</strong> que funcionam lá. A aplicação faz a conexão direta via TCP/IP na sua rede.
-              </p>
-            </div>
-          </div>
+          
 
-          {engine === 'mssql' && (
-            <div className="p-2.5 bg-amber-950/30 rounded-xl border border-amber-800/50 text-[11px] text-amber-200/95 flex items-start space-x-2">
-              <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-amber-300 block">Compatibilidade com SQL Server 2008 / 2008 R2 ativa:</span>
-                <span>O sistema negocia automaticamente TLS 1.0 (ciphers legados OpenSSL SECLEVEL=0) e protocolos TDS 7.3A/7.3B com trustServerCertificate para instâncias legadas no Windows Server 2008.</span>
-              </div>
-            </div>
-          )}*/
+         
 
           {/* Nome de Identificação do Servidor */}
           <div>
@@ -392,32 +375,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </span>
           </div>
 
-          {/* Modo de Autenticação */}
-          {engine === 'mssql' ? (
-            <div className="p-3 bg-red-950/40 rounded-xl border border-red-800/60 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5 text-xs font-bold text-red-300">
-                  <ShieldCheck className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>Modo de Autenticação: SQL Server Authentication</span>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-200 border border-red-500/40">
-                  SQL Server Auth
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300">
-                A conexão utiliza o login nativo do SQL Server (ex: <code className="text-red-300 font-mono">sa</code> ou usuário criado). Certifique-se de que o SQL Server está configurado para <strong>Modo Misto (Mixed Mode)</strong>.
-              </p>
-            </div>
-          ) : (
-            <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-[11px]">
-              <div className="flex items-center space-x-1.5 text-slate-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                <span>Autenticação:</span>
-                <span className="text-slate-200 font-medium">{selectedEngineMeta.authModeLabel}</span>
-              </div>
-              <span className="text-[10px] text-slate-500 font-mono">Padrão do SGBD</span>
-            </div>
-          )}
+         
 
           {/* Usuário e Senha do Banco */}
           <div className="grid grid-cols-2 gap-3">
