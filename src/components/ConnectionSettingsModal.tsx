@@ -301,7 +301,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             </div>
           </div>
 
-          {/* Dica comparativa com DBeaver */}
+          /*{ Dica comparativa com DBeaver }
           <div className="p-3 bg-blue-950/30 rounded-xl border border-blue-800/40 text-[11px] text-blue-200 flex items-start space-x-2.5">
             <HelpCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -320,7 +320,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                 <span>O sistema negocia automaticamente TLS 1.0 (ciphers legados OpenSSL SECLEVEL=0) e protocolos TDS 7.3A/7.3B com trustServerCertificate para instâncias legadas no Windows Server 2008.</span>
               </div>
             </div>
-          )}
+          )}*/
 
           {/* Nome de Identificação do Servidor */}
           <div>

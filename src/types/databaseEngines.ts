@@ -1,4 +1,4 @@
-import { DatabaseInfo } from './serverFleet';
+import { DatabaseInfo, TableSizeInfo } from './serverFleet';
 import { StuckQuery } from './locks';
 import { FileLocationSetting, PgSystemConfig } from './config';
 
@@ -110,6 +110,7 @@ export interface EngineConnectResult {
   maxConnections?: number;
   ramTotalMb?: number;
   databases?: DatabaseInfo[];
+  topTables?: TableSizeInfo[];
   stuckQueries?: StuckQuery[];
   sysConfig?: PgSystemConfig;
   error?: string;

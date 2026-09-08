@@ -1,6 +1,6 @@
 import net from 'net';
 import sql from 'mssql';
-import { DatabaseInfo, ServerInstance } from '../types/serverFleet';
+import { DatabaseInfo, ServerInstance, TableSizeInfo } from '../types/serverFleet';
 import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
 import { EngineConnectParams, EngineConnectResult } from '../types/databaseEngines';

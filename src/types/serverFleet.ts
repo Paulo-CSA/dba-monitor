@@ -1,6 +1,15 @@
 import { FileLocationSetting } from './config';
 import { StuckQuery } from './locks';
 
+export interface TableSizeInfo {
+  schemaName: string;
+  tableName: string;
+  rowCount: number;
+  sizeBytes: number;
+  sizeFormatted: string;
+  totalMb: number;
+}
+
 export interface DatabaseInfo {
   datname: string;
   sizeBytes: number;
@@ -13,6 +22,7 @@ export interface DatabaseInfo {
   owner: string;
   encoding: string;
   status: 'online' | 'degraded' | 'maintenance';
+  topTables?: TableSizeInfo[];
 }
 
 export interface ServerInstance {
@@ -45,4 +55,5 @@ export interface ServerInstance {
   databases: DatabaseInfo[];
   fileLocations?: FileLocationSetting[];
   stuckQueries?: StuckQuery[];
+  topTables?: TableSizeInfo[];
 }
