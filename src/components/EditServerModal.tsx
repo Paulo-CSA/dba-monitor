@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ServerInstance } from '../types/serverFleet';
-import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2, ShieldCheck, Database, AlertTriangle } from 'lucide-react';
 
 interface EditServerModalProps {
   isOpen: boolean;
@@ -17,14 +17,16 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
   onSave,
   onDelete
 }) => {
-  const [formData, setFormData] = useState<Partial<ServerInstance>>({});
+  const [formData, setFormData] = useState<Partial<ServerInstance> & { database?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isRequerying, setIsRequerying] = useState(false);
-  const [queryMessage, setQueryMessage] = useState<string | null>(null);
+  const [queryResult, setQueryResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (server) {
+      const defaultDb = server.engine === 'mssql' ? 'master' : (server.engine === 'mysql' ? 'mysql' : 'postgres');
+      const currentDb = server.databases?.[0]?.datname || defaultDb;
       setFormData({
         id: server.id,
         name: server.name,
@@ -34,12 +36,13 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         authMode: server.authMode || (server.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
         dbUser: server.dbUser || 'postgres',
         dbPassword: server.dbPassword || '',
+        database: currentDb,
         environment: server.environment,
         pgVersion: server.pgVersion
       });
       setShowConfirmDelete(false);
       setShowPassword(false);
-      setQueryMessage(null);
+      setQueryResult(null);
     }
   }, [server]);
 
@@ -47,19 +50,21 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
 
   const handleRequeryServer = async () => {
     setIsRequerying(true);
-    setQueryMessage(null);
+    setQueryResult(null);
     try {
       const activeEngine = formData.engine || server.engine || 'postgres';
       const defaultDb = activeEngine === 'mssql' ? 'master' : (activeEngine === 'mysql' ? 'mysql' : 'postgres');
+      const targetDb = formData.database?.trim() || defaultDb;
+
       const res = await fetch('/api/db/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          host: formData.host || server.host,
+          host: (formData.host || server.host).trim(),
           port: Number(formData.port) || server.port,
-          dbUser: formData.dbUser || server.dbUser || 'postgres',
+          dbUser: (formData.dbUser || server.dbUser || 'postgres').trim(),
           dbPassword: formData.dbPassword || server.dbPassword || '',
-          database: defaultDb,
+          database: targetDb,
           engine: activeEngine,
           authMode: activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined
         })
@@ -84,13 +89,22 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         if (data.maxConnections) server.maxConnections = data.maxConnections;
         if (data.ramTotalMb) server.ramTotalMb = data.ramTotalMb;
 
-        setQueryMessage(`Consulta efetuada! Versão: ${data.serverVersion || data.pgVersion}. Uptime: ${data.uptimeFormatted || 'OK'}.`);
+        setQueryResult({
+          success: true,
+          message: `Conectado com sucesso! Versão: ${data.serverVersion || data.pgVersion}. ${data.databases?.length || 0} banco(s) identificados.`
+        });
       } else {
-        setQueryMessage(`Servidor consultado via SQL. Mantido ${server.databases.length} bancos identificados.`);
+        setQueryResult({
+          success: false,
+          message: data.message || data.error || 'Falha ao conectar no servidor com estas credenciais.'
+        });
       }
-    } catch {
+    } catch (err) {
       setIsRequerying(false);
-      setQueryMessage(`Servidor consultado. Versão: ${server.pgVersion}.`);
+      setQueryResult({
+        success: false,
+        message: `Erro ao tentar conectar: ${(err as Error).message}`
+      });
     }
   };
 
@@ -103,11 +117,11 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
     const updated: ServerInstance = {
       ...server,
       name: formData.name || server.name,
-      host: formData.host || server.host,
+      host: (formData.host || server.host).trim(),
       port: Number(formData.port) || server.port,
       engine: activeEngine,
       authMode: formData.authMode || (activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined),
-      dbUser: formData.dbUser || 'postgres',
+      dbUser: (formData.dbUser || 'postgres').trim(),
       dbPassword: formData.dbPassword || '',
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
       pgVersion: formData.pgVersion || server.pgVersion,
@@ -120,22 +134,28 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
   };
 
   const handleDelete = () => {
-    onDelete(server.id);
-    onClose();
+    if (server) {
+      onDelete(server.id);
+      onClose();
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-6">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in duration-150 max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center space-x-3">
-            <span className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center space-x-2">
+            <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20 text-cyan-400">
               <Server className="w-5 h-5" />
-            </span>
+            </div>
             <div>
-              <h2 className="text-base font-bold text-white">Configuração do Servidor</h2>
-              <p className="text-xs text-slate-400 font-mono">Credenciais de conexão e identificação do cluster</p>
+              <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <span>Editar Configurações do Servidor</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Ajuste credenciais de rede, usuário, senha e banco de dados
+              </p>
             </div>
           </div>
 
@@ -159,7 +179,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
               required
               value={formData.name || ''}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ex: PostgreSQL Prod Principal (US-East)"
+              placeholder="Ex: ERP Principal - Produção"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
             />
           </div>
@@ -175,7 +195,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                 required
                 value={formData.host || ''}
                 onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-                placeholder="Ex: 192.168.1.100 ou pg.dominio.com"
+                placeholder="Ex: 192.168.1.100"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
               />
             </div>
@@ -192,6 +212,23 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
               />
             </div>
+          </div>
+
+          {/* Banco de Dados Inicial */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-200 mb-1 flex items-center justify-between">
+              <span className="flex items-center space-x-1">
+                <Database className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Banco de Dados Inicial / Catálogo</span>
+              </span>
+            </label>
+            <input
+              type="text"
+              value={formData.database || ''}
+              onChange={(e) => setFormData({ ...formData, database: e.target.value })}
+              placeholder={server.engine === 'mssql' ? 'master' : (server.engine === 'mysql' ? 'mysql' : 'postgres')}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+            />
           </div>
 
           {/* Modo de Autenticação para MS SQL */}
@@ -253,11 +290,11 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
             </div>
           </div>
 
-          {/* Versão do PostgreSQL e Bancos Consultados no Servidor */}
+          {/* Versão e Bancos Consultados no Servidor */}
           <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-bold text-cyan-400 text-[11px] uppercase tracking-wider flex items-center space-x-1">
-                <span>Informações Consultadas no Servidor</span>
+                <span>Informações do Servidor</span>
               </span>
               <button
                 type="button"
@@ -266,13 +303,22 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                 className="flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 transition-colors cursor-pointer"
               >
                 <RefreshCw className={`w-3 h-3 ${isRequerying ? 'animate-spin' : ''}`} />
-                <span>Reconsultar via SQL</span>
+                <span>{isRequerying ? 'Conectando...' : 'Reconsultar via SQL'}</span>
               </button>
             </div>
 
-            {queryMessage && (
-              <div className="text-[11px] text-emerald-400 font-mono">
-                {queryMessage}
+            {queryResult && (
+              <div className={`p-2.5 rounded-lg border text-[11px] flex items-start space-x-2 ${
+                queryResult.success
+                  ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
+                  : 'bg-red-950/40 border-red-800/80 text-red-300'
+              }`}>
+                {queryResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                )}
+                <span>{queryResult.message}</span>
               </div>
             )}
 
@@ -340,42 +386,40 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center space-x-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Sim, Remover</span>
+                  <span>Sim, Remover Servidor</span>
                 </button>
               </div>
             </div>
-          ) : null}
-
-          {/* Action Buttons */}
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-            {!showConfirmDelete && (
+          ) : (
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setShowConfirmDelete(true)}
-                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 border border-rose-900/60 transition-all flex items-center space-x-1.5"
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center space-x-1.5 transition-colors cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>Remover Servidor</span>
               </button>
-            )}
 
-            <div className="flex items-center space-x-2 ml-auto">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/30 transition-all flex items-center space-x-1.5"
-              >
-                <Save className="w-4 h-4" />
-                <span>Salvar Configuração</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white flex items-center space-x-1.5 transition-colors shadow-lg shadow-cyan-600/20 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Salvar Alterações</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </form>
       </div>
     </div>

@@ -31,21 +31,102 @@ export interface LiveConnectResult {
   error?: string;
 }
 
+export function parsePgHost(rawHost: string, defaultPort = 5432): { host: string; port: number } {
+  let host = (rawHost || '127.0.0.1').trim();
+  host = host.replace(/^postgres:\/\//i, '').replace(/^postgresql:\/\//i, '').replace(/^tcp:\/\//i, '').replace(/^http:\/\//i, '').replace(/^https:\/\//i, '');
+  host = host.replace(/\/+$/, '');
+
+  let port = defaultPort;
+  if (host.includes(':')) {
+    const parts = host.split(':');
+    host = parts[0].trim();
+    const p = Number(parts[1]);
+    if (p && !isNaN(p)) port = p;
+  }
+  return { host, port };
+}
+
+function translatePgError(err: unknown, host: string, port: number, user: string, database: string): string {
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (msg.includes('password authentication failed') || msg.includes('authentication failed')) {
+    return `Falha de autenticação: A senha informada para o usuário '${user}' está incorreta no PostgreSQL (ou o usuário não possui permissão no banco '${database}'). Verifique se a senha é exatamente a mesma utilizada no DBeaver.`;
+  }
+  if (msg.includes('no pg_hba.conf entry') && (msg.includes('no encryption') || msg.includes('SSL'))) {
+    return `O PostgreSQL exige conexão criptografada (SSL). O cliente tentou conectar sem SSL e foi bloqueado pelas regras do pg_hba.conf.`;
+  }
+  if (msg.includes('no pg_hba.conf entry')) {
+    return `Acesso bloqueado pelo pg_hba.conf: O servidor PostgreSQL não tem permissão configurada para o IP de onde a aplicação está rodando. No servidor do banco, edite o arquivo pg_hba.conf e adicione uma regra liberando o host (exemplo: 'host all all 0.0.0.0/0 scram-sha-256') e execute 'SELECT pg_reload_conf();'.`;
+  }
+  if (msg.includes('database') && msg.includes('does not exist')) {
+    return `O banco de dados '${database}' não existe no PostgreSQL. No DBeaver você provavelmente conectou a outro banco de dados. Informe no campo 'Banco de Dados Inicial' o nome exato do banco cadastrado.`;
+  }
+  if (msg.includes('permission denied for database')) {
+    return `Permissão negada: O usuário '${user}' não tem permissão para conectar ao banco de dados '${database}'. Conecte ao banco de dados ao qual este usuário tem concessão (GRANT CONNECT ON DATABASE).`;
+  }
+  if (msg.includes('ECONNREFUSED')) {
+    return `Conexão recusada em ${host}:${port}. Verifique se o serviço PostgreSQL está em execução e se o parâmetro 'listen_addresses' no postgresql.conf está como '*' (e não apenas 'localhost').`;
+  }
+  if (msg.includes('ETIMEDOUT') || msg.includes('timeout')) {
+    return `Tempo esgotado ao conectar em ${host}:${port}. Verifique se o Firewall do servidor permite conexões de entrada na porta ${port} e se as duas máquinas estão na mesma rede/sub-rede.`;
+  }
+  if (msg.includes('ENOTFOUND')) {
+    return `Host '${host}' não resolvido na rede. Se estiver usando o nome da máquina, tente usar o endereço IP fixo da máquina na rede local (ex: 192.168.x.x).`;
+  }
+  return msg;
+}
+
 export async function testAndFetchLivePgData(params: LiveConnectParams): Promise<LiveConnectResult> {
-  const client = new pg.Client({
-    host: params.host,
-    port: params.port || 5432,
-    user: params.dbUser || 'postgres',
-    password: params.dbPassword || '',
-    database: params.database || 'postgres',
-    connectionTimeoutMillis: 4000,
-    statement_timeout: 5000,
-    ssl: false // Allow connecting to standard pg
-  });
+  const { host, port } = parsePgHost(params.host, params.port || 5432);
+  const user = params.dbUser || 'postgres';
+  const database = params.database || 'postgres';
+  const password = params.dbPassword || '';
+
+  // Try standard connection first, with fallback to SSL (rejectUnauthorized: false) if required
+  let client: pg.Client;
+  let isConnected = false;
+  let lastConnectErr: unknown = null;
+
+  const sslOptions = [false, { rejectUnauthorized: false }];
+
+  for (const sslMode of sslOptions) {
+    client = new pg.Client({
+      host,
+      port,
+      user,
+      password,
+      database,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 10000,
+      ssl: sslMode
+    });
+
+    try {
+      await client.connect();
+      isConnected = true;
+      break;
+    } catch (err: unknown) {
+      lastConnectErr = err;
+      try { await client.end(); } catch {}
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // If error is password failed or bad db name, retrying with SSL won't help
+      if (errMsg.includes('password authentication failed') || errMsg.includes('database') && errMsg.includes('does not exist')) {
+        break;
+      }
+    }
+  }
+
+  if (!isConnected) {
+    const advice = translatePgError(lastConnectErr, host, port, user, database);
+    return {
+      success: false,
+      isLive: false,
+      message: `Não foi possível conectar ao PostgreSQL em ${host}:${port}: ${advice}`,
+      error: lastConnectErr instanceof Error ? lastConnectErr.message : String(lastConnectErr)
+    };
+  }
 
   try {
-    await client.connect();
-
     // 1. Fetch exact PostgreSQL version via SELECT version();
     const versionRes = await client.query('SELECT version();');
     const fullVersionStr = versionRes.rows[0]?.version || '';
@@ -454,6 +535,10 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
         }
       ]
     };
+
+    try {
+      await client.end();
+    } catch {}
 
     return {
       success: true,

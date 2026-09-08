@@ -113,6 +113,4 @@ export interface EngineConnectResult {
   stuckQueries?: StuckQuery[];
   sysConfig?: PgSystemConfig;
   error?: string;
-  isPrivateNetwork?: boolean;
-  diagnostics?: string[];
 }
