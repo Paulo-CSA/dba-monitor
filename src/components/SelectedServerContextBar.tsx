@@ -1,6 +1,7 @@
 import React from 'react';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
 import { Server, Database, Activity, Cpu, HardDrive, Clock, CheckCircle2, AlertTriangle, ChevronRight, Globe, User, Users } from 'lucide-react';
+import { isSystemDatabase } from '../utils/systemDatabases';
 
 interface SelectedServerContextBarProps {
   servers: ServerInstance[];
@@ -36,10 +37,7 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
 
   const checkServerAlert = (srv: ServerInstance) => {
     const hasZeroTables = (srv.databases || []).some((d) => {
-      const isExcluded =
-        d.datname.toLowerCase() === 'postgres' ||
-        d.datname.toLowerCase() === 'root' ||
-        d.datname.toLowerCase().startsWith('template');
+      const isExcluded = isSystemDatabase(d.datname);
       const isSilenced = Boolean(
         silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
           silencedDbs[d.datname.toLowerCase()]
@@ -127,10 +125,10 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
               className="bg-transparent text-xs font-bold text-cyan-300 font-mono focus:outline-none cursor-pointer max-w-[160px] sm:max-w-[200px] truncate"
             >
               {activeServer.databases.map((db) => {
-                const isZero = (db.tablesCount ?? 0) < 1 && db.datname.toLowerCase() !== 'postgres';
+                const isZero = (db.tablesCount ?? 0) < 1 && !isSystemDatabase(db.datname);
                 return (
                   <option key={db.datname} value={db.datname} className="bg-slate-950 text-slate-100 font-mono">
-                    {isZero ? '⚠️ ' : ''}{db.datname} ({db.sizeFormatted})
+                    {isZero ? '⚠️ ' : ''}{db.datname} ({db.sizeFormatted || '0 B'})
                   </option>
                 );
               })}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
 import { Server, Database, Eye, ShieldCheck, Cpu, HardDrive, Clock, Search, ExternalLink, ArrowRight, Layers, Lock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { formatBytes } from '../utils/formatters';
+import { isSystemDatabase } from '../utils/systemDatabases';
 
 interface ServerFleetOverviewProps {
   servers: ServerInstance[];
@@ -81,10 +82,7 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
         {filteredServers.map((srv) => {
           const isSelected = srv.id === activeServer.id;
           const zeroTableDbs = (srv.databases || []).filter((d) => {
-            const isExcluded =
-              d.datname.toLowerCase() === 'postgres' ||
-              d.datname.toLowerCase() === 'root' ||
-              d.datname.toLowerCase().startsWith('template');
+            const isExcluded = isSystemDatabase(d.datname);
             const isSilenced = Boolean(
               silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
                 silencedDbs[d.datname.toLowerCase()]
@@ -251,8 +249,8 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
                 {activeServer.databases.map((db) => {
                   const isCurrentActiveDb = db.datname === selectedDatabaseName;
                   const tablesCount = db.tablesCount ?? 0;
-                  const isPostgres = db.datname.toLowerCase() === 'postgres';
-                  const hasZeroTables = tablesCount < 1 && !isPostgres;
+                  const isSystem = isSystemDatabase(db.datname);
+                  const hasZeroTables = tablesCount < 1 && !isSystem;
 
                   let rowBgClass = '';
                   if (hasZeroTables) {
@@ -284,7 +282,9 @@ export const ServerFleetOverview: React.FC<ServerFleetOverviewProps> = ({
 
                       <td className="py-3 px-4 text-slate-300">{db.owner}</td>
 
-                      <td className="py-3 px-4 font-bold text-emerald-400">{db.sizeFormatted}</td>
+                      <td className="py-3 px-4 font-bold text-emerald-400">
+                        {db.sizeFormatted || (db.sizeBytes ? formatBytes(db.sizeBytes) : '0 B')}
+                      </td>
 
                       <td className="py-3 px-4 text-slate-200">
                         <span className="font-bold text-cyan-400">{db.activeConnections || 0}</span>

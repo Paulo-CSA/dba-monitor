@@ -95,39 +95,50 @@ export default function App() {
         fetch('/api/db/alerts/rules')
       ]);
 
-      if (serversRes.ok) {
-        const sData = await serversRes.json();
-        if (sData.servers && sData.servers.length > 0) {
-          setFleetServers(sData.servers);
-          setSelectedServerId((prev) => prev || sData.servers[0].id);
-          setSelectedDatabaseName((prev) => prev || (sData.servers[0].databases[0]?.datname || 'postgres'));
+      const safeJson = async (r: Response) => {
+        if (!r.ok) return null;
+        const ct = r.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          try {
+            return await r.json();
+          } catch {
+            return null;
+          }
         }
+        return null;
+      };
+
+      const sData = await safeJson(serversRes);
+      if (sData && sData.servers && sData.servers.length > 0) {
+        setFleetServers(sData.servers);
+        setSelectedServerId((prev) => prev || sData.servers[0].id);
+        setSelectedDatabaseName((prev) => prev || (sData.servers[0].databases[0]?.datname || 'postgres'));
       }
 
-      if (configRes.ok) {
-        const cData = await configRes.json();
+      const cData = await safeJson(configRes);
+      if (cData) {
         setSysConfig(cData.config);
         setSqlConfigQuery(cData.sqlQuery);
       }
 
-      if (integrityRes.ok) {
-        const iData = await integrityRes.json();
+      const iData = await safeJson(integrityRes);
+      if (iData) {
         setIntegrity(iData);
       }
 
-      if (locksRes.ok) {
-        const lData = await locksRes.json();
+      const lData = await safeJson(locksRes);
+      if (lData) {
         setStuckQueries(lData.stuckQueries);
         setActiveLocks(lData.activeLocks);
       }
 
-      if (backupRes.ok) {
-        const bData = await backupRes.json();
+      const bData = await safeJson(backupRes);
+      if (bData) {
         setBackupOverview(bData);
       }
 
-      if (rulesRes.ok) {
-        const rData = await rulesRes.json();
+      const rData = await safeJson(rulesRes);
+      if (rData) {
         setAlertRules(rData);
       }
     } catch (err) {
@@ -209,8 +220,10 @@ export default function App() {
             });
 
             if (res.ok) {
-              const data = await res.json();
-              if (data.success) {
+              const ct = res.headers.get('content-type');
+              if (ct && ct.includes('application/json')) {
+                const data = await res.json();
+                if (data.success) {
                 // If live databases list returned from PostgreSQL SELECT datname FROM pg_database
                 const freshDatabases = (Array.isArray(data.databases) && data.databases.length > 0)
                   ? data.databases
@@ -264,6 +277,7 @@ export default function App() {
                 };
               }
             }
+          }
           } catch (e) {
             console.error(`Error polling live server ${srv.name}:`, e);
           }
@@ -292,10 +306,13 @@ export default function App() {
       try {
         const res = await fetch('/api/db/metrics');
         if (res.ok) {
-          const data = await res.json();
-          setMetrics(data.metrics);
-          setActiveAlerts(data.alerts || []);
-          setIsLoadSpike(data.isLoadSpike);
+          const ct = res.headers.get('content-type');
+          if (ct && ct.includes('application/json')) {
+            const data = await res.json();
+            if (data.metrics) setMetrics(data.metrics);
+            if (Array.isArray(data.alerts)) setActiveAlerts(data.alerts);
+            if (data.isLoadSpike !== undefined) setIsLoadSpike(data.isLoadSpike);
+          }
         }
         await pollAllFleetServers();
       } catch (err) {

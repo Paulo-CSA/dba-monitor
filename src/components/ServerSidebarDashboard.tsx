@@ -8,6 +8,7 @@ import { StuckQueriesTable } from './StuckQueriesTable';
 import { ActiveLocksView } from './ActiveLocksView';
 import { EditServerModal } from './EditServerModal';
 import { formatMs, formatBytes } from '../utils/formatters';
+import { isSystemDatabase } from '../utils/systemDatabases';
 
 import {
   Server,
@@ -84,16 +85,13 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   // Helper to detect server alerts (zero tables, high cpu, warning status, etc.)
   const getServerAlertInfo = (srv: ServerInstance) => {
     const zeroTableDbs = (srv.databases || []).filter((d) => {
-      const isPostgresOrRoot =
-        d.datname.toLowerCase() === 'postgres' ||
-        d.datname.toLowerCase() === 'root' ||
-        d.datname.toLowerCase().startsWith('template');
+      const isSystem = isSystemDatabase(d.datname);
       const isSilenced = Boolean(
         silencedDbs &&
           (silencedDbs[`${srv.id}:${d.datname.toLowerCase()}`] ||
             silencedDbs[d.datname.toLowerCase()])
       );
-      return (d.tablesCount ?? 0) < 1 && !isPostgresOrRoot && !isSilenced;
+      return (d.tablesCount ?? 0) < 1 && !isSystem && !isSilenced;
     });
     const hasZeroTables = zeroTableDbs.length > 0;
     const isWarningStatus = srv.status === 'warning' || srv.status === 'critical';
@@ -532,16 +530,13 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                   {activeServer.databases.map((db) => {
                     const isSelectedDb = db.datname === selectedDatabaseName;
                     const tablesCount = db.tablesCount ?? 0;
-                    const isPostgresOrRoot =
-                      db.datname.toLowerCase() === 'postgres' ||
-                      db.datname.toLowerCase() === 'root' ||
-                      db.datname.toLowerCase().startsWith('template');
+                    const isSystemDb = isSystemDatabase(db.datname);
                     const isSilenced = Boolean(
                       silencedDbs &&
                         (silencedDbs[`${activeServer.id}:${db.datname.toLowerCase()}`] ||
                           silencedDbs[db.datname.toLowerCase()])
                     );
-                    const isZeroTables = tablesCount < 1 && !isPostgresOrRoot && !isSilenced;
+                    const isZeroTables = tablesCount < 1 && !isSystemDb && !isSilenced;
 
                     let cardBgClass = '';
                     if (isZeroTables) {
@@ -617,7 +612,9 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                         <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs font-mono">
                           <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/40 border-orange-800/80' : 'bg-slate-900 border-slate-800'}`}>
                             <span className={`text-[10px] block ${isZeroTables ? 'text-orange-300' : 'text-slate-500'}`}>Tamanho em Disco</span>
-                            <span className="font-bold text-emerald-400">{db.sizeFormatted}</span>
+                            <span className="font-bold text-emerald-400">
+                              {db.sizeFormatted || (db.sizeBytes ? formatBytes(db.sizeBytes) : '0 B')}
+                            </span>
                           </div>
 
                           <div className={`p-2 rounded-xl border ${isZeroTables ? 'bg-orange-900/40 border-orange-800/80' : 'bg-slate-900 border-slate-800'}`}>

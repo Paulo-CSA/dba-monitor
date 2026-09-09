@@ -1,6 +1,7 @@
 import { AlertRule, ActiveAlert } from '../types/alerts';
 import { RealtimeMetricsPayload } from '../types/metrics';
 import { ServerInstance } from '../types/serverFleet';
+import { isSystemDatabase } from '../utils/systemDatabases';
 
 export class AlertEngine {
   private rules: AlertRule[] = [];
@@ -110,7 +111,7 @@ export class AlertEngine {
         for (const srv of servers) {
           if (!srv.databases) continue;
           for (const db of srv.databases) {
-            if (['postgres', 'root'].includes(db.datname.toLowerCase())) continue;
+            if (isSystemDatabase(db.datname)) continue;
             const val = db.tablesCount ?? 0;
             let triggered = false;
             if (rule.operator === '<' && val < rule.thresholdValue) triggered = true;

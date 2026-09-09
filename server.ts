@@ -136,17 +136,27 @@ async function startServer() {
 
   // Realtime metrics route
   app.get('/api/db/metrics', (req, res) => {
-    const data = metricsEngineSingleton.tickNextMetrics();
-    const activeAlerts = alertEngineSingleton.evaluateMetrics(
-      data,
-      lockAnalyzerSingleton.getLocksAndQueries().stuckQueries.length,
-      activeServersStore
-    );
-    res.json({
-      metrics: data,
-      alerts: activeAlerts,
-      isLoadSpike: metricsEngineSingleton.getIsLoadSpike()
-    });
+    try {
+      const data = metricsEngineSingleton.tickNextMetrics();
+      const activeAlerts = alertEngineSingleton.evaluateMetrics(
+        data,
+        lockAnalyzerSingleton.getLocksAndQueries().stuckQueries.length,
+        activeServersStore
+      );
+      res.json({
+        metrics: data,
+        alerts: activeAlerts,
+        isLoadSpike: metricsEngineSingleton.getIsLoadSpike()
+      });
+    } catch (err) {
+      console.error('Error in /api/db/metrics:', err);
+      res.status(500).json({
+        metrics: metricsEngineSingleton.getCurrentPayload(),
+        alerts: [],
+        isLoadSpike: false,
+        error: String(err)
+      });
+    }
   });
 
   // Toggle load spike simulation
