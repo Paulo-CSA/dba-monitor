@@ -17,7 +17,7 @@ import { ServerFleetOverview } from './components/ServerFleetOverview';
 import { ServerSidebarDashboard } from './components/ServerSidebarDashboard';
 import { GlobalDashboardView } from './components/GlobalDashboardView';
 import { SelectedServerContextBar } from './components/SelectedServerContextBar';
-import { ServerInstance, DatabaseInfo } from './types/serverFleet';
+import { ServerInstance, DatabaseInfo, TableSizeInfo } from './types/serverFleet';
 import { RealtimeMetricsPayload } from './types/metrics';
 import { PgSystemConfig } from './types/config';
 import { DatabaseIntegrityOverview } from './types/health';
@@ -203,7 +203,8 @@ export default function App() {
                 dbUser: srv.dbUser,
                 dbPassword: srv.dbPassword,
                 database: targetDb,
-                serverId: srv.id
+                serverId: srv.id,
+                engine: srv.engine
               })
             });
 
@@ -255,6 +256,7 @@ export default function App() {
                   maxConnections: data.maxConnections || srv.maxConnections,
                   ramTotalMb: data.ramTotalMb || srv.ramTotalMb,
                   stuckQueries: Array.isArray(data.queries) ? data.queries : srv.stuckQueries,
+                  topTables: (data.topTables && data.topTables.length > 0) ? data.topTables : srv.topTables,
                   databases: updatedDatabases,
                   totalDatabasesCount: updatedDatabases.length,
                   totalActiveConnections: sumDbConnections > 0 ? sumDbConnections : (Array.isArray(data.queries) ? data.queries.length : srv.totalActiveConnections),
@@ -743,6 +745,7 @@ export default function App() {
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
     liveFileLocations?: any[];
+    liveTopTables?: TableSizeInfo[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
     const serverPgVersion = serverData.pgVersion || 'PostgreSQL';
@@ -782,6 +785,7 @@ export default function App() {
       totalSizeFormatted: sizeFormatted,
       status: 'healthy',
       databases: databasesList,
+      topTables: serverData.liveTopTables && serverData.liveTopTables.length > 0 ? serverData.liveTopTables : undefined,
       fileLocations: serverData.liveFileLocations && serverData.liveFileLocations.length > 0 ? serverData.liveFileLocations : undefined,
       stuckQueries: serverData.liveQueries && serverData.liveQueries.length > 0 ? serverData.liveQueries : undefined
     };
@@ -880,47 +884,49 @@ export default function App() {
         }
       }
 
-      // 2. Ensure each database with active connections is fully represented
-      for (const db of srv.databases || []) {
-        const dbConns = db.activeConnections || 0;
-        const currentInDb = list.filter(
-          (c) =>
-            c.serverId === srv.id &&
-            c.datname &&
-            c.datname.toLowerCase() === db.datname.toLowerCase()
-        ).length;
+      // 2. Ensure each database with active connections is fully represented (PostgreSQL simulation fallback only)
+      if (srv.engine !== 'mssql') {
+        for (const db of srv.databases || []) {
+          const dbConns = db.activeConnections || 0;
+          const currentInDb = list.filter(
+            (c) =>
+              c.serverId === srv.id &&
+              c.datname &&
+              c.datname.toLowerCase() === db.datname.toLowerCase()
+          ).length;
 
-        const needed = dbConns - currentInDb;
-        if (needed > 0) {
-          const ownerUser = db.owner || srv.dbUser || 'postgres';
-          for (let i = 0; i < needed; i++) {
-            let pid = 2100 + (srv.id.charCodeAt(srv.id.length - 1) * 23) + list.length * 5 + i;
-            while (seenPids.has(pid)) {
-              pid += 1;
+          const needed = dbConns - currentInDb;
+          if (needed > 0) {
+            const ownerUser = db.owner || srv.dbUser || 'postgres';
+            for (let i = 0; i < needed; i++) {
+              let pid = 2100 + (srv.id.charCodeAt(srv.id.length - 1) * 23) + list.length * 5 + i;
+              while (seenPids.has(pid)) {
+                pid += 1;
+              }
+              seenPids.add(pid);
+              list.push({
+                pid,
+                serverId: srv.id,
+                serverName: srv.name,
+                usename: ownerUser,
+                datname: db.datname,
+                client_addr: serverHost,
+                application_name:
+                  i % 3 === 0
+                    ? 'psql / Backend API'
+                    : i % 3 === 1
+                    ? 'pgAdmin / Worker'
+                    : 'Node.js Pool Client',
+                state: i === 0 ? 'active' : i % 2 === 0 ? 'idle' : 'idle in transaction',
+                query: i === 0 ? `SELECT * FROM ${db.datname}.tables LIMIT 50;` : 'idle',
+                durationSeconds: Math.floor((i * 8 + 3) % 45),
+                wait_event_type: null,
+                wait_event: null,
+                blocking_pid: null,
+                isStuck: false,
+                query_start: new Date().toISOString()
+              });
             }
-            seenPids.add(pid);
-            list.push({
-              pid,
-              serverId: srv.id,
-              serverName: srv.name,
-              usename: ownerUser,
-              datname: db.datname,
-              client_addr: serverHost,
-              application_name:
-                i % 3 === 0
-                  ? 'psql / Backend API'
-                  : i % 3 === 1
-                  ? 'pgAdmin / Worker'
-                  : 'Node.js Pool Client',
-              state: i === 0 ? 'active' : i % 2 === 0 ? 'idle' : 'idle in transaction',
-              query: i === 0 ? `SELECT * FROM ${db.datname}.tables LIMIT 50;` : 'idle',
-              durationSeconds: Math.floor((i * 8 + 3) % 45),
-              wait_event_type: null,
-              wait_event: null,
-              blocking_pid: null,
-              isStuck: false,
-              query_start: new Date().toISOString()
-            });
           }
         }
       }

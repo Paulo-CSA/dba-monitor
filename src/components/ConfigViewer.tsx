@@ -88,6 +88,96 @@ export const ConfigViewer: React.FC<ConfigViewerProps> = ({ config, sqlQuery, se
 
   const activeLocations = getActiveLocations();
 
+  if (server?.engine === 'mssql') {
+    return (
+      <div className="space-y-6">
+        {/* Server Banner */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+              <Server className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-base font-bold text-white">{server.name}</h2>
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                  {server.pgVersion || 'Microsoft SQL Server'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">
+                Host: <span className="text-slate-200">{server.host}:{server.port}</span> | Banco Ativo: <span className="text-emerald-400 font-bold">{databaseName || 'master'}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* MS SQL Notice Box */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 mt-0.5">
+              <Terminal className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Arquivos de Configuração no Microsoft SQL Server</h3>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                Diferente do PostgreSQL (que utiliza arquivos de texto como <code className="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded">postgresql.conf</code> e <code className="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded">pg_hba.conf</code>), o Microsoft SQL Server gerencia parâmetros de servidor e memória internamente através da procedure de sistema <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">sp_configure</code> e do catálogo <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">sys.configurations</code>, sem arquivos de texto físicos no disco.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+              <span>Comando T-SQL para Auditoria de Parâmetros</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText("EXEC sp_configure 'show advanced options', 1;\nRECONFIGURE;\nEXEC sp_configure;");
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2000);
+                }}
+                className="inline-flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+              >
+                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSql ? 'Copiado!' : 'Copiar Script'}</span>
+              </button>
+            </div>
+            <pre className="font-mono text-xs text-cyan-300 overflow-x-auto whitespace-pre">
+{`-- Exibir todas as configurações e parâmetros ativos da instância SQL Server
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+EXEC sp_configure;
+SELECT name, value, value_in_use, description FROM sys.configurations ORDER BY name;`}
+            </pre>
+          </div>
+        </div>
+
+        {/* SQL Server Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Gerenciamento de Memória</span>
+            <span className="text-lg font-bold font-mono text-white">Dynamic Memory (Buffer Pool)</span>
+            <span className="text-[11px] text-slate-400 block mt-1">Controlado via sp_configure 'max server memory (MB)'</span>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Autenticação e Acesso</span>
+            <span className="text-lg font-bold font-mono text-emerald-400">
+              {server.authMode || 'SQL Server & Windows Auth'}
+            </span>
+            <span className="text-[11px] text-slate-400 block mt-1">Gerenciado via Logins e Server Roles no catálogo master</span>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <span className="text-xs text-slate-400 block mb-1 font-semibold uppercase">Conexões Simultâneas</span>
+            <span className="text-lg font-bold font-mono text-cyan-400">
+              {server.totalActiveConnections || 0} Ativas / {server.maxConnections || 32767} Limite
+            </span>
+            <span className="text-[11px] text-slate-400 block mt-1">Sessões ativas em sys.dm_exec_sessions</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const filteredLocations = activeLocations.filter(
     item =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

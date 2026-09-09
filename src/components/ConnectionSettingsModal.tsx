@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle } from 'lucide-react';
-import { DatabaseInfo } from '../types/serverFleet';
+import { DatabaseInfo, TableSizeInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
 import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
 
@@ -28,6 +28,7 @@ interface ConnectionSettingsModalProps {
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
     liveFileLocations?: FileLocationSetting[];
+    liveTopTables?: TableSizeInfo[];
   }) => void;
 }
 
@@ -62,6 +63,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     liveDatabases?: DatabaseInfo[];
     liveQueries?: any[];
     liveFileLocations?: FileLocationSetting[];
+    liveTopTables?: TableSizeInfo[];
   } | null>(null);
 
   const handleEngineChange = (selectedEngine: DatabaseEngineType) => {
@@ -121,7 +123,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           ramTotalMb: data.ramTotalMb,
           liveDatabases: detectedDbs,
           liveQueries: data.stuckQueries,
-          liveFileLocations: fileLocs
+          liveFileLocations: fileLocs,
+          liveTopTables: data.topTables
         });
 
         return {
@@ -137,7 +140,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           ramTotalMb: data.ramTotalMb,
           databases: detectedDbs,
           queries: data.stuckQueries,
-          fileLocations: fileLocs
+          fileLocations: fileLocs,
+          topTables: data.topTables
         };
       } else {
         const errMsg = data.message || data.error || `Não foi possível conectar ao servidor ${DATABASE_ENGINES[engine].name} informado. Verifique Host, Porta, Login e Senha.`;
@@ -170,6 +174,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     let databases = testStatus?.liveDatabases;
     let queries = testStatus?.liveQueries;
     let fileLocations = testStatus?.liveFileLocations;
+    let topTables = testStatus?.liveTopTables;
     let uptimeFormatted = testStatus?.uptimeFormatted;
     let uptimeSeconds = testStatus?.uptimeSeconds;
     let sharedBuffers = testStatus?.sharedBuffers;
@@ -189,6 +194,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         databases = res.databases;
         queries = res.queries;
         fileLocations = res.fileLocations;
+        topTables = res.topTables;
         uptimeFormatted = res.uptimeFormatted;
         uptimeSeconds = res.uptimeSeconds;
         sharedBuffers = res.sharedBuffers;
@@ -229,7 +235,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         environment,
         liveDatabases: databases || [],
         liveQueries: queries || [],
-        liveFileLocations: fileLocations || []
+        liveFileLocations: fileLocations || [],
+        liveTopTables: topTables || []
       });
     } else {
       onClose();

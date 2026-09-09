@@ -274,82 +274,286 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
       const rawVersion = versionResult.recordset[0]?.version || 'Microsoft SQL Server';
       const firstLineVersion = rawVersion.split('\n')[0]?.trim() || rawVersion;
 
-      // 2. Databases query
+      // 2. Query real active user sessions (sys.dm_exec_sessions with fallback to sys.sysprocesses)
+      let stuckQueries: StuckQuery[] = [];
+      try {
+        const sessResult = await pool.request().query(`
+          SELECT 
+            s.session_id AS pid,
+            s.login_name AS usename,
+            ISNULL(DB_NAME(s.database_id), 'master') AS datname,
+            ISNULL(c.client_net_address, ISNULL(s.host_name, '${host}')) AS client_addr,
+            ISNULL(s.program_name, 'SQL Server Client') AS application_name,
+            CASE 
+              WHEN r.status IS NOT NULL AND r.status <> '' THEN r.status
+              WHEN s.status = 'running' THEN 'active'
+              WHEN s.status = 'sleeping' THEN 'idle'
+              ELSE ISNULL(s.status, 'idle')
+            END AS state,
+            ISNULL(r.start_time, s.last_request_start_time) AS query_start,
+            ISNULL(DATEDIFF(second, ISNULL(r.start_time, s.last_request_start_time), GETDATE()), 0) AS duration_seconds,
+            ISNULL(t.text, CASE WHEN r.command IS NOT NULL AND r.command <> '' THEN 'COMMAND: ' + r.command ELSE 'Sessão conectada / aguardando comando' END) AS query_text,
+            r.wait_type,
+            r.blocking_session_id AS blocking_pid
+          FROM sys.dm_exec_sessions s
+          LEFT JOIN sys.dm_exec_connections c ON s.session_id = c.session_id
+          LEFT JOIN sys.dm_exec_requests r ON s.session_id = r.session_id
+          OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
+          WHERE s.is_user_process = 1
+          ORDER BY duration_seconds DESC, s.session_id ASC;
+        `);
+
+        stuckQueries = (sessResult.recordset || []).map((row: any) => ({
+          pid: Number(row.pid),
+          usename: String(row.usename || user),
+          datname: String(row.datname || database),
+          client_addr: String(row.client_addr || host),
+          application_name: String(row.application_name || 'SQL Server Client'),
+          state: String(row.state || 'idle'),
+          query_start: row.query_start ? new Date(row.query_start).toISOString() : new Date().toISOString(),
+          durationSeconds: Math.max(0, Number(row.duration_seconds) || 0),
+          query: String(row.query_text || 'Sessão idle'),
+          wait_event_type: row.wait_type ? 'Wait' : null,
+          wait_event: row.wait_type ? String(row.wait_type) : null,
+          blocking_pid: row.blocking_pid ? Number(row.blocking_pid) : null,
+          isStuck: (Number(row.duration_seconds) || 0) > 30
+        }));
+      } catch {
+        // Fallback to sys.sysprocesses for legacy versions or limited permissions
+        try {
+          const procRes = await pool.request().query(`
+            SELECT 
+              p.spid AS pid,
+              p.loginame AS usename,
+              ISNULL(DB_NAME(p.dbid), 'master') AS datname,
+              ISNULL(p.hostname, '${host}') AS client_addr,
+              ISNULL(p.program_name, 'SQL Client') AS application_name,
+              CASE WHEN p.status IN ('runnable', 'running') THEN 'active' ELSE 'idle' END AS state,
+              ISNULL(DATEDIFF(second, p.last_batch, GETDATE()), 0) AS duration_seconds,
+              CASE WHEN p.cmd IS NOT NULL AND p.cmd <> '' THEN 'COMMAND: ' + p.cmd ELSE 'Sessão idle' END AS query_text,
+              p.waittype AS wait_type,
+              CASE WHEN p.blocked > 0 THEN p.blocked ELSE NULL END AS blocking_pid
+            FROM sys.sysprocesses p
+            WHERE p.spid > 50
+            ORDER BY duration_seconds DESC;
+          `);
+
+          stuckQueries = (procRes.recordset || []).map((row: any) => ({
+            pid: Number(row.pid),
+            usename: String(row.usename || user),
+            datname: String(row.datname || database),
+            client_addr: String(row.client_addr || host),
+            application_name: String(row.application_name || 'SQL Client'),
+            state: String(row.state || 'idle'),
+            query_start: new Date().toISOString(),
+            durationSeconds: Math.max(0, Number(row.duration_seconds) || 0),
+            query: String(row.query_text || 'Sessão idle'),
+            wait_event_type: row.wait_type ? 'Wait' : null,
+            wait_event: row.wait_type ? String(row.wait_type) : null,
+            blocking_pid: row.blocking_pid ? Number(row.blocking_pid) : null,
+            isStuck: (Number(row.duration_seconds) || 0) > 30
+          }));
+        } catch {
+          // Limited user permissions
+        }
+      }
+
+      // Group active connections per database name
+      const connsPerDb: Record<string, number> = {};
+      for (const sess of stuckQueries) {
+        const dbKey = (sess.datname || '').toLowerCase();
+        connsPerDb[dbKey] = (connsPerDb[dbKey] || 0) + 1;
+      }
+
+      // 3. Real Table Counts per Database
+      const tableCountsMap: Record<string, number> = {};
+      try {
+        const countRes = await pool.request().query(`
+          DECLARE @tblCount TABLE (dbname NVARCHAR(128), tbl_count INT);
+          DECLARE @dbName NVARCHAR(128);
+          DECLARE db_cursor CURSOR LOCAL FAST_FORWARD FOR
+            SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND HAS_DBACCESS(name) = 1;
+          OPEN db_cursor;
+          FETCH NEXT FROM db_cursor INTO @dbName;
+          WHILE @@FETCH_STATUS = 0
+          BEGIN
+            DECLARE @subSql NVARCHAR(MAX) = 'SELECT ''' + REPLACE(@dbName, '''', '''''') + ''', COUNT(*) FROM [' + REPLACE(@dbName, ']', ']]') + '].sys.tables WHERE is_ms_shipped = 0';
+            BEGIN TRY
+              INSERT INTO @tblCount EXEC sp_executesql @subSql;
+            END TRY
+            BEGIN CATCH
+            END CATCH;
+            FETCH NEXT FROM db_cursor INTO @dbName;
+          END;
+          CLOSE db_cursor;
+          DEALLOCATE db_cursor;
+          SELECT dbname, tbl_count FROM @tblCount;
+        `);
+
+        for (const row of countRes.recordset || []) {
+          if (row.dbname) {
+            tableCountsMap[String(row.dbname).toLowerCase()] = Number(row.tbl_count) || 0;
+          }
+        }
+      } catch {
+        // Restricted permissions for cursor
+      }
+
+      // Direct count on current connected database
+      let currentDbTableCount = 0;
+      try {
+        const curTblRes = await pool.request().query(`
+          SELECT COUNT(*) AS current_tbl_count FROM sys.tables WHERE is_ms_shipped = 0;
+        `);
+        currentDbTableCount = Number(curTblRes.recordset[0]?.current_tbl_count) || 0;
+        tableCountsMap[database.toLowerCase()] = currentDbTableCount;
+      } catch {}
+
+      // 4. Real Top Tables and Sizes in the current connected database
+      let topTables: TableSizeInfo[] = [];
+      try {
+        const tablesRes = await pool.request().query(`
+          SELECT TOP 50
+            s.name AS schema_name,
+            t.name AS table_name,
+            p.row_count,
+            CAST(ROUND((a.total_pages * 8.0) / 1024.0, 2) AS NUMERIC(36, 2)) AS total_mb,
+            CAST(a.total_pages AS BIGINT) * 8192 AS total_bytes
+          FROM sys.tables t
+          INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+          INNER JOIN (
+            SELECT 
+              object_id,
+              SUM(CASE WHEN index_id IN (0, 1) THEN [rows] ELSE 0 END) AS row_count
+            FROM sys.partitions
+            GROUP BY object_id
+          ) p ON t.object_id = p.object_id
+          INNER JOIN (
+            SELECT 
+              p.object_id,
+              SUM(a.total_pages) AS total_pages
+            FROM sys.partitions p
+            INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
+            GROUP BY p.object_id
+          ) a ON t.object_id = a.object_id
+          WHERE t.is_ms_shipped = 0
+          ORDER BY a.total_pages DESC;
+        `);
+
+        topTables = (tablesRes.recordset || []).map((row: any) => {
+          const bytes = Number(row.total_bytes) || 0;
+          return {
+            schemaName: String(row.schema_name || 'dbo'),
+            tableName: String(row.table_name),
+            rowCount: Number(row.row_count) || 0,
+            sizeBytes: bytes,
+            sizeFormatted: formatBytes(bytes),
+            totalMb: parseFloat(row.total_mb) || 0
+          };
+        });
+
+        if (topTables.length > 0 && currentDbTableCount === 0) {
+          currentDbTableCount = topTables.length;
+          tableCountsMap[database.toLowerCase()] = currentDbTableCount;
+        }
+      } catch {}
+
+      // 5. Databases query with real sizes and collations
       let databases: DatabaseInfo[] = [];
       try {
         const dbsResult = await pool.request().query(`
           SELECT 
             d.name,
             d.state_desc,
-            ROUND(ISNULL(SUM(mf.size) * 8 / 1024.0, 0), 2) AS size_mb
+            ISNULL(d.collation_name, 'SQL_Latin1_General_CP1_CI_AS') AS collation_name,
+            ISNULL(SUSER_SNAME(d.owner_sid), '${user}') AS owner_name,
+            ROUND(ISNULL(SUM(CAST(mf.size AS BIGINT)) * 8.0 / 1024.0, 0), 2) AS size_mb,
+            ISNULL(SUM(CAST(mf.size AS BIGINT)) * 8192, 0) AS size_bytes
           FROM sys.databases d
           LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
-          GROUP BY d.name, d.state_desc
+          GROUP BY d.name, d.state_desc, d.collation_name, d.owner_sid
           ORDER BY 
             CASE WHEN d.name IN ('master', 'tempdb', 'model', 'msdb') THEN 1 ELSE 0 END,
             d.name ASC;
         `);
 
-        databases = dbsResult.recordset.map((row: any) => {
-          const sizeMb = parseFloat(row.size_mb) || 50;
-          const bytes = Math.round(sizeMb * 1024 * 1024);
+        databases = (dbsResult.recordset || []).map((row: any) => {
+          const bytes = Number(row.size_bytes) || Math.round((parseFloat(row.size_mb) || 0) * 1024 * 1024);
+          const dbName = String(row.name);
+          const dbKey = dbName.toLowerCase();
+          const isCurDb = dbKey === database.toLowerCase();
+          const tCount = tableCountsMap[dbKey] ?? (isCurDb ? currentDbTableCount : 0);
+          const activeConns = connsPerDb[dbKey] ?? (isCurDb ? 1 : 0);
+
           return {
-            datname: row.name,
+            datname: dbName,
             sizeBytes: bytes,
             sizeFormatted: formatBytes(bytes),
-            activeConnections: 1,
+            activeConnections: activeConns,
             maxConnections: 32767,
             tps: 15,
-            cacheHitRatio: 99.7,
-            tablesCount: 30,
-            owner: user,
-            encoding: 'SQL_Latin1_General_CP1_CI_AS',
-            status: (row.state_desc || 'ONLINE').toLowerCase()
+            cacheHitRatio: 99.8,
+            tablesCount: tCount,
+            owner: String(row.owner_name || user),
+            encoding: String(row.collation_name || 'SQL_Latin1_General_CP1_CI_AS'),
+            status: (row.state_desc || 'ONLINE').toLowerCase() as any,
+            topTables: isCurDb ? topTables : undefined
           };
         });
       } catch {
-        databases = generateDefaultMssqlDatabases(database);
+        // Non-fatal if user has limited permissions on sys.master_files
       }
 
-      // 3. Query active user sessions
-      let stuckQueries: StuckQuery[] = [];
+      // Check current database exact size from sys.database_files
       try {
-        const sessResult = await pool.request().query(`
-          SELECT TOP 20
-            s.session_id,
-            s.login_name,
-            s.host_name,
-            s.program_name,
-            s.status,
-            r.command,
-            r.wait_type,
-            r.wait_time,
-            ISNULL(DATEDIFF(second, r.start_time, GETDATE()), 0) AS duration_seconds,
-            t.text AS query_text
-          FROM sys.dm_exec_sessions s
-          LEFT JOIN sys.dm_exec_requests r ON s.session_id = r.session_id
-          OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
-          WHERE s.is_user_process = 1
-          ORDER BY r.wait_time DESC;
+        const curDbSizeRes = await pool.request().query(`
+          SELECT 
+            DB_NAME() AS name,
+            SUM(CAST(size AS BIGINT)) * 8192 AS size_bytes
+          FROM sys.database_files;
         `);
+        const curBytes = Number(curDbSizeRes.recordset[0]?.size_bytes) || 0;
+        if (curBytes > 0) {
+          const curIdx = databases.findIndex((d) => d.datname.toLowerCase() === database.toLowerCase());
+          if (curIdx >= 0) {
+            if (databases[curIdx].sizeBytes === 0 || curBytes > databases[curIdx].sizeBytes) {
+              databases[curIdx].sizeBytes = curBytes;
+              databases[curIdx].sizeFormatted = formatBytes(curBytes);
+            }
+          } else {
+            databases.unshift({
+              datname: database,
+              sizeBytes: curBytes,
+              sizeFormatted: formatBytes(curBytes),
+              activeConnections: connsPerDb[database.toLowerCase()] || 1,
+              maxConnections: 32767,
+              tps: 15,
+              cacheHitRatio: 99.8,
+              tablesCount: currentDbTableCount || topTables.length,
+              owner: user,
+              encoding: 'SQL_Latin1_General_CP1_CI_AS',
+              status: 'online',
+              topTables
+            });
+          }
+        }
+      } catch {}
 
-        stuckQueries = sessResult.recordset.map((row: any) => ({
-          pid: row.session_id,
-          usename: row.login_name || user,
+      if (databases.length === 0) {
+        databases = [{
           datname: database,
-          client_addr: row.host_name || host,
-          application_name: row.program_name || 'SQL Server Client',
-          state: row.status || 'idle',
-          query_start: new Date().toISOString(),
-          durationSeconds: row.duration_seconds || 0,
-          query: row.query_text || (row.command ? `COMMAND: ${row.command}` : 'Session idle / listening'),
-          wait_event_type: row.wait_type ? 'Wait' : null,
-          wait_event: row.wait_type || null,
-          blocking_pid: null,
-          isStuck: (row.duration_seconds || 0) > 30
-        }));
-      } catch {
-        // Non-fatal if user has limited permissions
+          sizeBytes: 0,
+          sizeFormatted: '0 B',
+          activeConnections: connsPerDb[database.toLowerCase()] || 1,
+          maxConnections: 32767,
+          tps: 15,
+          cacheHitRatio: 99.8,
+          tablesCount: currentDbTableCount || topTables.length,
+          owner: user,
+          encoding: 'SQL_Latin1_General_CP1_CI_AS',
+          status: 'online',
+          topTables
+        }];
       }
 
       // 4. Universal uptime query for SQL Server 2000, 2005, 2008, 2008 R2, 2012, 2016, 2019, 2022
@@ -389,6 +593,7 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         maxConnections: 32767,
         ramTotalMb: 16384,
         databases,
+        topTables,
         stuckQueries
       };
     } catch (queryErr: any) {
@@ -421,27 +626,58 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
 }
 
 /**
- * Fallback databases list for MS SQL Server
+ * Terminates an active session in Microsoft SQL Server using KILL <session_id>
  */
-function generateDefaultMssqlDatabases(currentDb = 'master'): DatabaseInfo[] {
-  const dbs = ['master', 'tempdb', 'model', 'msdb'];
-  if (currentDb && !dbs.includes(currentDb)) {
-    dbs.push(currentDb);
-  }
+export async function killMssqlSession(
+  params: EngineConnectParams,
+  pid: number
+): Promise<{ success: boolean; message: string }> {
+  const rawHost = params.host || '127.0.0.1';
+  const defaultPort = Number(params.port) || 1433;
+  const { server: host, port, instanceName } = parseMssqlHost(rawHost, defaultPort);
+  const user = (params.dbUser || 'sa').trim();
+  const database = (params.database || 'master').trim();
+  const password = params.dbPassword || '';
 
-  return dbs.map((db, idx) => ({
-    datname: db,
-    sizeBytes: (idx + 1) * 250 * 1024 * 1024,
-    sizeFormatted: `${(idx + 1) * 250} MB`,
-    activeConnections: idx === 0 ? 5 : 2,
-    maxConnections: 32767,
-    tps: 15,
-    cacheHitRatio: 99.8,
-    tablesCount: idx === 0 ? 45 : 20,
-    owner: 'sa',
-    encoding: 'SQL_Latin1_General_CP1_CI_AS',
-    status: 'online'
-  }));
+  const config: sql.config = {
+    user,
+    password,
+    server: host,
+    port: instanceName ? undefined : port,
+    database,
+    connectionTimeout: 10000,
+    requestTimeout: 10000,
+    options: {
+      encrypt: false,
+      trustServerCertificate: true,
+      enableArithAbort: true,
+      cryptoCredentialsDetails: {
+        minVersion: 'TLSv1',
+        ciphers: 'DEFAULT@SECLEVEL=0'
+      },
+      ...(instanceName ? { instanceName } : {})
+    }
+  };
+
+  let pool: sql.ConnectionPool | null = null;
+  try {
+    pool = new sql.ConnectionPool(config);
+    await pool.connect();
+    await pool.request().query(`KILL ${pid};`);
+    await pool.close();
+    return {
+      success: true,
+      message: `Comando KILL ${pid} executado com sucesso no SQL Server (${host}). Sessão encerrada.`
+    };
+  } catch (err: any) {
+    if (pool) {
+      try { await pool.close(); } catch {}
+    }
+    return {
+      success: false,
+      message: `Erro ao executar KILL ${pid} no SQL Server: ${err?.message || 'Permissão negada ou sessão já finalizada.'}`
+    };
+  }
 }
 
 /**

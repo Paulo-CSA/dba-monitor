@@ -19,6 +19,8 @@ import { alertEngineSingleton } from './src/services/alertEngine';
 import { mockServerFleet } from './src/services/fleetService';
 import pg from 'pg';
 import { testAndFetchLivePgData, fetchLiveConnectionsForDb } from './src/services/pgLiveService';
+import { testAndFetchLiveMssqlData, killMssqlSession } from './src/services/mssqlService';
+import { testAndFetchLiveMysqlData } from './src/services/mysqlService';
 import { dispatchTestConnection } from './src/services/engineDispatcher';
 import { ServerInstance } from './src/types/serverFleet';
 
@@ -162,6 +164,16 @@ async function startServer() {
 
     if (serverId && typeof serverId === 'string') {
       const server = activeServersStore.find((s) => s.id === serverId);
+      if (server?.engine === 'mssql') {
+        res.json({
+          isMssql: true,
+          engine: 'mssql',
+          message: 'Arquivos de configuração física (postgresql.conf) são específicos do PostgreSQL. No Microsoft SQL Server, as configurações são gerenciadas via sp_configure e propriedades da instância.',
+          config: null,
+          sqlQuery: '-- Microsoft SQL Server: configurações gerenciadas via sp_configure'
+        });
+        return;
+      }
       if (server && server.fileLocations && server.fileLocations.length > 0) {
         res.json({
           config: {
@@ -198,12 +210,13 @@ async function startServer() {
 
   // Fetch live active connections specifically for a database
   app.post('/api/db/fetch-live-connections', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, serverId } = req.body;
+    const { host, port, dbUser, dbPassword, database, serverId, engine: reqEngine } = req.body;
     
     let targetHost = host;
     let targetPort = port;
     let targetUser = dbUser;
     let targetPassword = dbPassword;
+    let targetEngine = reqEngine || 'postgres';
 
     if (serverId && typeof serverId === 'string') {
       const foundSrv = activeServersStore.find((s) => s.id === serverId);
@@ -212,9 +225,99 @@ async function startServer() {
         targetPort = targetPort || foundSrv.port;
         targetUser = targetUser || foundSrv.dbUser;
         targetPassword = targetPassword || foundSrv.dbPassword;
+        targetEngine = foundSrv.engine || targetEngine;
       }
     }
 
+    // Engine: MS SQL Server
+    if (targetEngine === 'mssql') {
+      try {
+        const mssqlResult = await testAndFetchLiveMssqlData({
+          host: targetHost,
+          port: Number(targetPort) || 1433,
+          dbUser: targetUser,
+          dbPassword: targetPassword,
+          database: database || 'master',
+          engine: 'mssql'
+        });
+
+        if (mssqlResult.success && serverId) {
+          activeServersStore = activeServersStore.map((srv) => {
+            if (srv.id === serverId) {
+              return {
+                ...srv,
+                databases: mssqlResult.databases || srv.databases,
+                topTables: mssqlResult.topTables || srv.topTables,
+                stuckQueries: mssqlResult.stuckQueries || srv.stuckQueries,
+                totalDatabasesCount: mssqlResult.databases ? mssqlResult.databases.length : srv.totalDatabasesCount,
+                pgVersion: mssqlResult.pgVersion || srv.pgVersion,
+                uptimeFormatted: mssqlResult.uptimeFormatted || srv.uptimeFormatted,
+                uptimeSeconds: mssqlResult.uptimeSeconds ?? srv.uptimeSeconds
+              };
+            }
+            return srv;
+          });
+          saveServersToDisk(activeServersStore);
+        }
+
+        res.json({
+          success: mssqlResult.success,
+          databases: mssqlResult.databases,
+          queries: mssqlResult.stuckQueries,
+          topTables: mssqlResult.topTables,
+          pgVersion: mssqlResult.pgVersion,
+          uptimeFormatted: mssqlResult.uptimeFormatted,
+          uptimeSeconds: mssqlResult.uptimeSeconds
+        });
+        return;
+      } catch (err: any) {
+        res.json({ success: false, error: err?.message, databases: [], queries: [] });
+        return;
+      }
+    }
+
+    // Engine: MySQL
+    if (targetEngine === 'mysql') {
+      try {
+        const mysqlResult = await testAndFetchLiveMysqlData({
+          host: targetHost,
+          port: Number(targetPort) || 3306,
+          dbUser: targetUser,
+          dbPassword: targetPassword,
+          database: database || 'mysql',
+          engine: 'mysql'
+        });
+
+        if (mysqlResult.success && serverId) {
+          activeServersStore = activeServersStore.map((srv) => {
+            if (srv.id === serverId) {
+              return {
+                ...srv,
+                databases: mysqlResult.databases || srv.databases,
+                stuckQueries: mysqlResult.stuckQueries || srv.stuckQueries,
+                totalDatabasesCount: mysqlResult.databases ? mysqlResult.databases.length : srv.totalDatabasesCount,
+                pgVersion: mysqlResult.pgVersion || srv.pgVersion
+              };
+            }
+            return srv;
+          });
+          saveServersToDisk(activeServersStore);
+        }
+
+        res.json({
+          success: mysqlResult.success,
+          databases: mysqlResult.databases,
+          queries: mysqlResult.stuckQueries,
+          pgVersion: mysqlResult.pgVersion
+        });
+        return;
+      } catch (err: any) {
+        res.json({ success: false, error: err?.message, databases: [], queries: [] });
+        return;
+      }
+    }
+
+    // Engine: PostgreSQL (default)
     const result = await fetchLiveConnectionsForDb({
       host: targetHost,
       port: Number(targetPort) || 5432,
@@ -243,11 +346,33 @@ async function startServer() {
     res.json(result);
   });
 
-  // Kill stuck backend session (SELECT pg_terminate_backend(pid))
+  // Kill stuck backend session (SELECT pg_terminate_backend(pid) or KILL <session_id>)
   app.post('/api/db/kill-pid', async (req, res) => {
-    const { pid, host, port, dbUser, dbPassword, database } = req.body;
+    const { pid, host, port, dbUser, dbPassword, database, engine, serverId } = req.body;
     if (!pid || typeof pid !== 'number') {
       res.status(400).json({ success: false, message: 'PID numérico inválido.' });
+      return;
+    }
+
+    let targetEngine = engine;
+    if (!targetEngine && serverId) {
+      const srv = activeServersStore.find((s) => s.id === serverId);
+      if (srv) targetEngine = srv.engine;
+    }
+
+    if (targetEngine === 'mssql') {
+      const killRes = await killMssqlSession(
+        {
+          host: host || '127.0.0.1',
+          port: Number(port) || 1433,
+          dbUser: dbUser || 'sa',
+          dbPassword,
+          database: database || 'master',
+          engine: 'mssql'
+        },
+        pid
+      );
+      res.json(killRes);
       return;
     }
 
