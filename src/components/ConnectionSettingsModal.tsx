@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle, ShieldOff, Shield } from 'lucide-react';
+import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle, ShieldOff, Shield, Link2, Terminal, Check } from 'lucide-react';
 import { DatabaseInfo, TableSizeInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
 import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
+import { parseConnectionInput, isPrivateOrLocalHost } from '../utils/connectionParser';
 
 interface ConnectionSettingsModalProps {
   onClose: () => void;
@@ -50,6 +51,10 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   const [environment, setEnvironment] = useState<'Produção' | 'Desenvolvimento' | 'Homologação'>('Produção');
   const [showPassword, setShowPassword] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [dbeaverInput, setDbeaverInput] = useState('');
+  const [showDbeaverBox, setShowDbeaverBox] = useState(false);
+  const [dbeaverNotice, setDbeaverNotice] = useState<string | null>(null);
+  const [showNetworkTip, setShowNetworkTip] = useState(false);
   const [testStatus, setTestStatus] = useState<{
     success: boolean;
     message: string;
@@ -68,6 +73,39 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     liveFileLocations?: FileLocationSetting[];
     liveTopTables?: TableSizeInfo[];
   } | null>(null);
+
+  const handleApplyDbeaverUrl = () => {
+    if (!dbeaverInput.trim()) return;
+    const parsed = parseConnectionInput(dbeaverInput.trim(), engine, port);
+
+    setHost(parsed.host);
+    if (parsed.port) setPort(parsed.port);
+    if (parsed.database) setDatabase(parsed.database);
+    if (parsed.user) setUser(parsed.user);
+    if (parsed.password) setPassword(parsed.password);
+    if (parsed.sslMode) setSslMode(parsed.sslMode);
+
+    setDbeaverNotice(`Dados extraídos com sucesso! Host '${parsed.host}', Porta ${parsed.port}${parsed.database ? `, Banco '${parsed.database}'` : ''}${parsed.user ? `, Usuário '${parsed.user}'` : ''}`);
+    setShowDbeaverBox(false);
+    setTimeout(() => setDbeaverNotice(null), 8000);
+  };
+
+  const handleHostChange = (val: string) => {
+    if (val.includes('jdbc:') || val.includes('://') || (val.includes('/') && val.length > 5)) {
+      const parsed = parseConnectionInput(val, engine, port);
+      setHost(parsed.host);
+      if (parsed.port) setPort(parsed.port);
+      if (parsed.database) setDatabase(parsed.database);
+      if (parsed.user) setUser(parsed.user);
+      if (parsed.password) setPassword(parsed.password);
+      if (parsed.sslMode) setSslMode(parsed.sslMode);
+
+      setDbeaverNotice(`URL do DBeaver/JDBC detectada e decomposta! (Host: ${parsed.host}:${parsed.port}${parsed.database ? ' / ' + parsed.database : ''})`);
+      setTimeout(() => setDbeaverNotice(null), 8000);
+      return;
+    }
+    setHost(val);
+  };
 
   const handleEngineChange = (selectedEngine: DatabaseEngineType) => {
     setEngine(selectedEngine);
@@ -335,6 +373,55 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
             />
           </div>
 
+          {/* DBeaver JDBC Quick Importer */}
+          <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Link2 className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-semibold text-cyan-200">Importar / Colar URL do DBeaver</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDbeaverBox(!showDbeaverBox)}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium"
+              >
+                {showDbeaverBox ? 'Ocultar' : 'Colar URL do DBeaver'}
+              </button>
+            </div>
+
+            {showDbeaverBox && (
+              <div className="mt-2.5 space-y-2">
+                <p className="text-[11px] text-slate-400">
+                  Cole a URL copiada do DBeaver (ex: <code className="text-cyan-300 font-mono">jdbc:postgresql://ip_do_servidor:5432/nomedobanco</code>). A aplicação preenche automaticamente Host, Porta, Banco e Usuário.
+                </p>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={dbeaverInput}
+                    onChange={(e) => setDbeaverInput(e.target.value)}
+                    placeholder="jdbc:postgresql://192.168.1.100:5432/meubanco"
+                    className="flex-1 bg-slate-950 border border-cyan-800/60 rounded-lg px-3 py-1.5 text-xs text-cyan-100 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyDbeaverUrl}
+                    className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg flex items-center space-x-1 transition-all"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Aplicar</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {dbeaverNotice && (
+              <div className="mt-2 flex items-center space-x-1.5 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 rounded-lg px-2.5 py-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>{dbeaverNotice}</span>
+              </div>
+            )}
+          </div>
+
           {/* Host & Porta */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
@@ -344,12 +431,12 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               <input
                 type="text"
                 value={host}
-                onChange={(e) => setHost(e.target.value)}
-                placeholder={engine === 'mssql' ? '192.168.1.100 ou 192.168.1.100\\SQLEXPRESS' : '192.168.1.100'}
+                onChange={(e) => handleHostChange(e.target.value)}
+                placeholder={engine === 'mssql' ? '192.168.1.100 ou 192.168.1.100\\SQLEXPRESS' : '192.168.1.100 ou jdbc:postgresql://...'}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
               />
               <span className="text-[10px] text-slate-500 mt-0.5 block">
-                {engine === 'mssql' ? 'IP da máquina na rede. Instâncias nomeadas (ex: \\SQLEXPRESS) são tratadas automaticamente.' : 'IP fixo da máquina onde o banco de dados está instalado.'}
+                {engine === 'mssql' ? 'IP da máquina na rede. Instâncias nomeadas (ex: \\SQLEXPRESS) são tratadas automaticamente.' : 'IP do servidor ou URL JDBC do DBeaver.'}
               </span>
             </div>
 
@@ -366,6 +453,69 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               </span>
             </div>
           </div>
+
+          {/* Diagnóstico de Rede Privada / Local vs Nuvem */}
+          {isPrivateOrLocalHost(host) && (
+            <div className="p-3 bg-amber-950/30 border border-amber-800/50 rounded-xl text-xs space-y-2">
+              <div className="flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold text-amber-300">
+                    Por que conecta pelo DBeaver e não pela aplicação?
+                  </span>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                    O host informado (<code className="text-amber-200 font-mono font-semibold">{host}</code>) é um endereço de <strong>rede local/privada</strong> (LAN/VPN/localhost). O DBeaver conecta perfeitamente porque ele roda instalado diretamente no seu computador físico dentro dessa mesma rede.
+                  </p>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                    Porém, esta aplicação web está rodando em um servidor em nuvem (Google Cloud Run), que não tem acesso à rede interna da sua empresa/casa sem um IP público ou túnel TCP.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-amber-900/40 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Como liberar acesso ao seu banco de dados:</span>
+                <button
+                  type="button"
+                  onClick={() => setShowNetworkTip(!showNetworkTip)}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium flex items-center space-x-1"
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>{showNetworkTip ? 'Ocultar Guia' : 'Ver 3 Soluções Rápidas'}</span>
+                </button>
+              </div>
+
+              {showNetworkTip && (
+                <div className="mt-2 p-3 bg-slate-950/95 rounded-lg border border-amber-900/40 text-[11px] text-slate-300 space-y-2.5">
+                  <div>
+                    <span className="font-semibold text-amber-300">Opção 1: Túnel Instantâneo com ngrok (30 segundos, grátis)</span>
+                    <p className="text-slate-400 mt-0.5">
+                      Na máquina onde o PostgreSQL está rodando, abra o terminal e digite:
+                    </p>
+                    <code className="block my-1 bg-black/80 px-2.5 py-1.5 rounded text-amber-300 font-mono">
+                      ngrok tcp {port || 5432}
+                    </code>
+                    <p className="text-slate-400">
+                      O ngrok exibirá um endereço público como <span className="text-cyan-300 font-mono">0.tcp.ngrok.io:12345</span>. Basta colocar <span className="text-cyan-300 font-mono">0.tcp.ngrok.io</span> no Host e <span className="text-cyan-300 font-mono">12345</span> na Porta!
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <span className="font-semibold text-amber-300">Opção 2: IP Público com Redirecionamento de Porta (Port Forwarding)</span>
+                    <p className="text-slate-400 mt-0.5">
+                      No roteador da sua rede, configure o redirecionamento da porta {port || 5432} para o IP interno {host}, e informe o IP público da sua internet neste formulário.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <span className="font-semibold text-amber-300">Opção 3: Executar a aplicação localmente</span>
+                    <p className="text-slate-400 mt-0.5">
+                      Você pode baixar o código ou clonar o projeto e rodar localmente no seu computador com <span className="text-cyan-300 font-mono">npm install && npm run dev</span>. Rodando localmente, a aplicação terá o mesmo acesso que o DBeaver.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Banco de Dados Inicial */}
           <div>

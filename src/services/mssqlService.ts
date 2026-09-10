@@ -5,6 +5,7 @@ import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
 import { EngineConnectParams, EngineConnectResult } from '../types/databaseEngines';
 import { formatBytes, formatUptimeSeconds } from '../utils/formatters';
+import { parseConnectionInput, isPrivateOrLocalHost } from '../utils/connectionParser';
 
 export interface MssqlSessionInfo {
   session_id: number;
@@ -23,15 +24,17 @@ export interface MssqlSessionInfo {
  * E.g., '192.168.1.50\\SQLEXPRESS' -> server '192.168.1.50', instanceName 'SQLEXPRESS'
  * E.g., '172.16.0.49:1433' -> server '172.16.0.49', port 1433
  */
-export function parseMssqlHost(rawHost: string, defaultPort = 1433): { server: string; port: number; instanceName?: string } {
-  let server = (rawHost || '127.0.0.1').trim();
-  // Remove protocol prefixes if user pasted URL
-  server = server.replace(/^tcp:\/\//i, '').replace(/^tcp:/i, '').replace(/^http:\/\//i, '').replace(/^https:\/\//i, '');
-  // Remove trailing slashes
-  server = server.replace(/\/+$/, '');
-
+export function parseMssqlHost(rawHost: string, defaultPort = 1433): {
+  server: string;
+  port: number;
+  instanceName?: string;
+  database?: string;
+  user?: string;
+  password?: string;
+} {
+  const parsed = parseConnectionInput(rawHost, 'mssql', defaultPort);
   let instanceName: string | undefined = undefined;
-  let port = defaultPort;
+  let server = parsed.host;
 
   if (server.includes('\\')) {
     const parts = server.split('\\');
@@ -39,16 +42,14 @@ export function parseMssqlHost(rawHost: string, defaultPort = 1433): { server: s
     instanceName = parts[1].trim();
   }
 
-  if (server.includes(':')) {
-    const parts = server.split(':');
-    server = parts[0].trim();
-    const parsedPort = Number(parts[1]);
-    if (parsedPort && !isNaN(parsedPort)) {
-      port = parsedPort;
-    }
-  }
-
-  return { server, port, instanceName };
+  return {
+    server,
+    port: parsed.port,
+    instanceName,
+    database: parsed.database,
+    user: parsed.user,
+    password: parsed.password
+  };
 }
 
 /**
@@ -119,6 +120,11 @@ export async function probeMssqlServer(host: string, port: number, timeoutMs = 7
  */
 function translateMssqlError(err: any, host: string, port: number, user: string, database: string): string {
   const msg = err?.message || String(err || '');
+  const isLan = isPrivateOrLocalHost(host);
+
+  if (isLan && (msg.includes('ETIMEDOUT') || msg.includes('timeout') || msg.includes('ECONNREFUSED') || msg.includes('Failed to connect to'))) {
+    return `O IP '${host}' é um endereço de rede local/privada (LAN/VPN). O DBeaver conecta porque é executado diretamente no seu computador na mesma rede. Como este painel web está na nuvem, ele requer IP público com porta liberada ou túnel (ngrok/Cloudflare).`;
+  }
 
   if (msg.includes('Login failed for user') || err?.number === 18456) {
     return `Falha de autenticação no SQL Server: O login '${user}' ou a senha estão incorretos (Erro 18456). No SQL Server 2008, certifique-se de que o servidor está com 'SQL Server and Windows Authentication mode' (Modo Misto) ativo nas Propriedades do Servidor > Segurança, e que o login '${user}' possui o status 'Grant' e 'Enabled'.`;

@@ -5,20 +5,23 @@ import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
 import { EngineConnectParams, EngineConnectResult } from '../types/databaseEngines';
 import { formatBytes, formatUptimeSeconds } from '../utils/formatters';
+import { parseConnectionInput, isPrivateOrLocalHost } from '../utils/connectionParser';
 
-export function parseMysqlHost(rawHost: string, defaultPort = 3306): { host: string; port: number } {
-  let host = (rawHost || '127.0.0.1').trim();
-  host = host.replace(/^mysql:\/\//i, '').replace(/^tcp:\/\//i, '').replace(/^http:\/\//i, '').replace(/^https:\/\//i, '');
-  host = host.replace(/\/+$/, '');
-
-  let port = defaultPort;
-  if (host.includes(':')) {
-    const parts = host.split(':');
-    host = parts[0].trim();
-    const p = Number(parts[1]);
-    if (p && !isNaN(p)) port = p;
-  }
-  return { host, port };
+export function parseMysqlHost(rawHost: string, defaultPort = 3306): {
+  host: string;
+  port: number;
+  database?: string;
+  user?: string;
+  password?: string;
+} {
+  const parsed = parseConnectionInput(rawHost, 'mysql', defaultPort);
+  return {
+    host: parsed.host,
+    port: parsed.port,
+    database: parsed.database,
+    user: parsed.user,
+    password: parsed.password
+  };
 }
 
 /**
@@ -27,6 +30,11 @@ export function parseMysqlHost(rawHost: string, defaultPort = 3306): { host: str
 function translateMysqlError(err: any, host: string, port: number, user: string, database: string): string {
   const msg = err?.message || String(err);
   const code = err?.code;
+  const isLan = isPrivateOrLocalHost(host);
+
+  if (isLan && (code === 'ETIMEDOUT' || msg.includes('ETIMEDOUT') || code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED'))) {
+    return `O IP '${host}' é um endereço de rede local/privada (LAN/VPN). O DBeaver conecta porque roda no seu computador na mesma rede. Como o painel web está na nuvem, ele requer IP público com porta redirecionada ou túnel (ngrok/Cloudflare).`;
+  }
 
   if (code === 'ER_ACCESS_DENIED_ERROR' || msg.includes('Access denied for user')) {
     return `Acesso negado no MySQL: Usuário '${user}' ou senha incorretos para o host de origem (ER_ACCESS_DENIED_ERROR). No MySQL, usuários criados como '${user}'@'localhost' NÃO podem conectar remotamente; certifique-se de que o usuário foi criado como '${user}'@'%' ou com permissão para o IP da aplicação.`;
