@@ -215,9 +215,7 @@ export default function App() {
                 dbPassword: srv.dbPassword,
                 database: targetDb,
                 serverId: srv.id,
-                engine: srv.engine,
-                sslMode: srv.sslMode,
-                ssl: srv.ssl
+                engine: srv.engine
               })
             });
 
@@ -751,8 +749,6 @@ export default function App() {
     database?: string;
     engine?: 'postgres' | 'mysql' | 'mssql';
     authMode?: string;
-    sslMode?: 'disable' | 'auto' | 'require';
-    ssl?: boolean;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -787,8 +783,6 @@ export default function App() {
       port: serverData.port || 5432,
       engine: serverData.engine || 'postgres',
       authMode: serverData.authMode || (serverData.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
-      sslMode: serverData.sslMode,
-      ssl: serverData.ssl,
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
       environment: serverData.environment || 'Produção',
