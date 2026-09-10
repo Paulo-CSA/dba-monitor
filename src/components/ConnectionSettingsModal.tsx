@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle, ShieldOff, Shield } from 'lucide-react';
 import { DatabaseInfo, TableSizeInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
 import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
@@ -15,6 +15,8 @@ interface ConnectionSettingsModalProps {
     database?: string;
     engine?: DatabaseEngineType;
     authMode?: string;
+    sslMode?: 'disable' | 'auto' | 'require';
+    ssl?: boolean;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -44,6 +46,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
   const [user, setUser] = useState('postgres');
   const [password, setPassword] = useState('');
   const [database, setDatabase] = useState('postgres');
+  const [sslMode, setSslMode] = useState<'auto' | 'disable' | 'require'>('auto');
   const [environment, setEnvironment] = useState<'Produção' | 'Desenvolvimento' | 'Homologação'>('Produção');
   const [showPassword, setShowPassword] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -88,6 +91,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
     setTestStatus(null);
     try {
       const targetDb = database.trim() || (engine === 'mssql' ? 'master' : (engine === 'mysql' ? 'mysql' : 'postgres'));
+      const activeSsl = sslMode === 'disable' ? false : (sslMode === 'require' ? true : undefined);
       const res = await fetch('/api/db/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +102,9 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           dbPassword: password,
           database: targetDb,
           engine,
-          authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode
+          authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode,
+          sslMode: engine === 'postgres' ? sslMode : undefined,
+          ssl: engine === 'postgres' ? activeSsl : undefined
         })
       });
       const data = await res.json();
@@ -223,6 +229,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         database: primaryDb,
         engine,
         authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode,
+        sslMode: engine === 'postgres' ? sslMode : undefined,
+        ssl: engine === 'postgres' ? (sslMode === 'disable' ? false : (sslMode === 'require' ? true : undefined)) : undefined,
         pgVersion: versionStr || DATABASE_ENGINES[engine].name,
         uptimeFormatted,
         uptimeSeconds,
@@ -381,6 +389,108 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
               Caso seu usuário não tenha permissão de acesso a <code className="text-cyan-400 font-mono">{engine === 'mssql' ? 'master' : (engine === 'mysql' ? 'mysql' : 'postgres')}</code>, informe aqui o nome exato do banco que você configurou no DBeaver.
             </span>
           </div>
+
+          {/* Configuração de SSL / Criptografia para PostgreSQL */}
+          {engine === 'postgres' && (
+            <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200 flex items-center space-x-1.5">
+                  {sslMode === 'disable' ? (
+                    <ShieldOff className="w-4 h-4 text-amber-400" />
+                  ) : sslMode === 'require' ? (
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Shield className="w-4 h-4 text-cyan-400" />
+                  )}
+                  <span>Criptografia de Conexão (SSL)</span>
+                </label>
+
+                {sslMode === 'disable' ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center space-x-1">
+                    <ShieldOff className="w-3 h-3" />
+                    <span>SSL Desativado (ssl = off)</span>
+                  </span>
+                ) : sslMode === 'require' ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>SSL Obrigatório</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                    Modo Automático
+                  </span>
+                )}
+              </div>
+
+              {/* Botão de Toggle Direto para Desativar SSL */}
+              <button
+                type="button"
+                onClick={() => setSslMode(sslMode === 'disable' ? 'auto' : 'disable')}
+                className={`w-full p-2.5 rounded-lg border flex items-center justify-between text-left transition-all cursor-pointer ${
+                  sslMode === 'disable'
+                    ? 'bg-amber-950/40 border-amber-600/80 text-amber-200 shadow-sm shadow-amber-950/50'
+                    : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
+                    sslMode === 'disable'
+                      ? 'bg-amber-500 border-amber-400 text-slate-950'
+                      : 'border-slate-600 bg-slate-950'
+                  }`}>
+                    {sslMode === 'disable' && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-950 stroke-[3]" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold flex items-center space-x-1.5">
+                      <span>Desativar SSL (Conexão direta sem criptografia)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Conecta diretamente via TCP sem SSLRequest. Use se o PostgreSQL estiver configurado com <code>ssl = off</code> no postgresql.conf.
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {/* Seletor granular dos 3 modos */}
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSslMode('disable')}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border text-center transition-all cursor-pointer ${
+                    sslMode === 'disable'
+                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-200 font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  Sem SSL (Desativado)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSslMode('auto')}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border text-center transition-all cursor-pointer ${
+                    sslMode === 'auto'
+                      ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-200 font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  Automático (Padrão)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSslMode('require')}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-medium border text-center transition-all cursor-pointer ${
+                    sslMode === 'require'
+                      ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-200 font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  Exigir SSL (Nuvem)
+                </button>
+              </div>
+            </div>
+          )}
 
          
 

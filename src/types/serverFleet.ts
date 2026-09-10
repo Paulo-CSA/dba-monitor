@@ -32,6 +32,8 @@ export interface ServerInstance {
   port: number;
   engine?: 'postgres' | 'mysql' | 'mssql';
   authMode?: string;
+  sslMode?: 'disable' | 'auto' | 'require';
+  ssl?: boolean;
   environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;

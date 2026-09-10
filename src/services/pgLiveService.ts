@@ -10,6 +10,8 @@ export interface LiveConnectParams {
   dbUser: string;
   dbPassword?: string;
   database: string;
+  sslMode?: 'disable' | 'auto' | 'require';
+  ssl?: boolean;
 }
 
 export interface LiveConnectResult {
@@ -52,8 +54,11 @@ function translatePgError(err: unknown, host: string, port: number, user: string
   if (msg.includes('password authentication failed') || msg.includes('authentication failed')) {
     return `Falha de autenticação: A senha informada para o usuário '${user}' está incorreta no PostgreSQL (ou o usuário não possui permissão no banco '${database}'). Verifique se a senha é exatamente a mesma utilizada no DBeaver.`;
   }
+  if (msg.includes('server does not support SSL') || msg.includes('does not support SSL')) {
+    return `O servidor PostgreSQL em ${host}:${port} não aceita conexões criptografadas (está configurado com 'ssl = off' no postgresql.conf). Selecione a opção "Desativar SSL (Sem Criptografia)" na configuração do servidor para conectar com sucesso.`;
+  }
   if (msg.includes('no pg_hba.conf entry') && (msg.includes('no encryption') || msg.includes('SSL'))) {
-    return `O PostgreSQL exige conexão criptografada (SSL). O cliente tentou conectar sem SSL e foi bloqueado pelas regras do pg_hba.conf.`;
+    return `O PostgreSQL exige conexão criptografada (SSL) de acordo com as regras do pg_hba.conf. Configure o Modo SSL como "Exigir SSL" ou "Automático".`;
   }
   if (msg.includes('no pg_hba.conf entry')) {
     return `Acesso bloqueado pelo pg_hba.conf: O servidor PostgreSQL não tem permissão configurada para o IP de onde a aplicação está rodando. No servidor do banco, edite o arquivo pg_hba.conf e adicione uma regra liberando o host (exemplo: 'host all all 0.0.0.0/0 scram-sha-256') e execute 'SELECT pg_reload_conf();'.`;
@@ -82,12 +87,23 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
   const database = params.database || 'postgres';
   const password = params.dbPassword || '';
 
-  // Try standard connection first, with fallback to SSL (rejectUnauthorized: false) if required
+  // Configure SSL options based on user preference:
+  // - 'disable' or ssl === false: strictly unencrypted connection (never try SSL, compatible with ssl=off)
+  // - 'require' or ssl === true: strictly SSL connection (rejectUnauthorized: false)
+  // - 'auto' or default: try unencrypted first, fallback to SSL if server requires encryption
+  let sslOptions: Array<boolean | { rejectUnauthorized: boolean }>;
+
+  if (params.sslMode === 'disable' || params.ssl === false) {
+    sslOptions = [false];
+  } else if (params.sslMode === 'require' || params.ssl === true) {
+    sslOptions = [{ rejectUnauthorized: false }];
+  } else {
+    sslOptions = [false, { rejectUnauthorized: false }];
+  }
+
   let client: pg.Client;
   let isConnected = false;
   let lastConnectErr: unknown = null;
-
-  const sslOptions = [false, { rejectUnauthorized: false }];
 
   for (const sslMode of sslOptions) {
     client = new pg.Client({
@@ -110,7 +126,15 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       try { await client.end(); } catch {}
       const errMsg = err instanceof Error ? err.message : String(err);
       // If error is password failed or bad db name, retrying with SSL won't help
-      if (errMsg.includes('password authentication failed') || errMsg.includes('database') && errMsg.includes('does not exist')) {
+      if (
+        errMsg.includes('password authentication failed') ||
+        errMsg.includes('authentication failed') ||
+        (errMsg.includes('database') && errMsg.includes('does not exist'))
+      ) {
+        break;
+      }
+      // If user explicitly disabled SSL, do not attempt any further connection modes
+      if (params.sslMode === 'disable' || params.ssl === false) {
         break;
       }
     }
@@ -579,6 +603,8 @@ export async function fetchLiveConnectionsForDb(params: {
   dbUser?: string;
   dbPassword?: string;
   database?: string;
+  sslMode?: 'disable' | 'auto' | 'require';
+  ssl?: boolean;
 }): Promise<{
   success: boolean;
   queries: StuckQuery[];
@@ -605,7 +631,9 @@ export async function fetchLiveConnectionsForDb(params: {
     port: params.port || 5432,
     dbUser: params.dbUser || 'postgres',
     dbPassword: params.dbPassword || '',
-    database: targetDb
+    database: targetDb,
+    sslMode: params.sslMode,
+    ssl: params.ssl
   });
 
   // If connection failed (e.g., target database was dropped), retry with 'postgres' default database
@@ -615,7 +643,9 @@ export async function fetchLiveConnectionsForDb(params: {
       port: params.port || 5432,
       dbUser: params.dbUser || 'postgres',
       dbPassword: params.dbPassword || '',
-      database: 'postgres'
+      database: 'postgres',
+      sslMode: params.sslMode,
+      ssl: params.ssl
     });
   }
 
