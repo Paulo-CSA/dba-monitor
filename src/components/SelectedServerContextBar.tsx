@@ -10,6 +10,7 @@ interface SelectedServerContextBarProps {
   onSelectServer: (serverId: string) => void;
   onSelectDatabase: (datname: string) => void;
   silencedDbs?: Record<string, boolean>;
+  onNavigateToServerMetrics?: () => void;
 }
 
 export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> = ({
@@ -18,7 +19,8 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
   selectedDatabaseName,
   onSelectServer,
   onSelectDatabase,
-  silencedDbs = {}
+  silencedDbs = {},
+  onNavigateToServerMetrics
 }) => {
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
   if (!activeServer) {
@@ -204,6 +206,18 @@ export const SelectedServerContextBar: React.FC<SelectedServerContextBarProps> =
             <span className="text-slate-400">Tamanho:</span>
             <span className="font-bold text-indigo-300">{activeDb?.sizeFormatted || activeServer.totalSizeFormatted}</span>
           </div>
+
+          <button
+            onClick={onNavigateToServerMetrics}
+            className="flex items-center space-x-1.5 bg-indigo-950/70 hover:bg-indigo-900 px-2.5 py-1 rounded-lg border border-indigo-700/60 text-indigo-300 hover:text-cyan-300 transition-colors cursor-pointer"
+            title={`SNMPv${activeServer.snmpConfig?.version || '2c'} (community: ${activeServer.snmpConfig?.community || 'n4tUr3Z4'}) - Clique para ver Métricas do Servidor`}
+          >
+            <Server className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-slate-400">SNMPv{activeServer.snmpConfig?.version || '2c'}:</span>
+            <span className="font-bold text-cyan-300">
+              CPU {activeServer.cpuUsagePercent}% | RAM {activeServer.ramUsagePercent || 50}%
+            </span>
+          </button>
         </div>
       </div>
     </div>

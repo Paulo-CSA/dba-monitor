@@ -1,5 +1,6 @@
 import { FileLocationSetting } from './config';
 import { StuckQuery } from './locks';
+import { SnmpConfig, SnmpServerMetrics } from './snmp';
 
 export interface TableSizeInfo {
   schemaName: string;
@@ -32,8 +33,6 @@ export interface ServerInstance {
   port: number;
   engine?: 'postgres' | 'mysql' | 'mssql';
   authMode?: string;
-  sslMode?: 'disable' | 'auto' | 'require';
-  ssl?: boolean;
   environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;
@@ -58,4 +57,7 @@ export interface ServerInstance {
   fileLocations?: FileLocationSetting[];
   stuckQueries?: StuckQuery[];
   topTables?: TableSizeInfo[];
+  snmpConfig?: SnmpConfig;
+  snmpMetrics?: SnmpServerMetrics;
 }
+

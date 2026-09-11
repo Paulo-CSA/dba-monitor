@@ -3,7 +3,6 @@ import { ServerInstance, DatabaseInfo } from '../types/serverFleet';
 import { StuckQuery } from '../types/locks';
 import { FileLocationSetting, PgSystemConfig } from '../types/config';
 import { formatBytes, formatUptimeSeconds, parsePgSettingMemory } from '../utils/formatters';
-import { parseConnectionInput, isPrivateOrLocalHost } from '../utils/connectionParser';
 
 export interface LiveConnectParams {
   host: string;
@@ -11,8 +10,6 @@ export interface LiveConnectParams {
   dbUser: string;
   dbPassword?: string;
   database: string;
-  sslMode?: 'disable' | 'auto' | 'require';
-  ssl?: boolean;
 }
 
 export interface LiveConnectResult {
@@ -34,96 +31,63 @@ export interface LiveConnectResult {
   error?: string;
 }
 
-export function parsePgHost(rawHost: string, defaultPort = 5432): {
-  host: string;
-  port: number;
-  database?: string;
-  user?: string;
-  password?: string;
-  sslMode?: 'disable' | 'auto' | 'require';
-  ssl?: boolean;
-} {
-  const parsed = parseConnectionInput(rawHost, 'postgres', defaultPort);
-  return {
-    host: parsed.host,
-    port: parsed.port,
-    database: parsed.database,
-    user: parsed.user,
-    password: parsed.password,
-    sslMode: parsed.sslMode,
-    ssl: parsed.ssl
-  };
+export function parsePgHost(rawHost: string, defaultPort = 5432): { host: string; port: number } {
+  let host = (rawHost || '127.0.0.1').trim();
+  host = host.replace(/^postgres:\/\//i, '').replace(/^postgresql:\/\//i, '').replace(/^tcp:\/\//i, '').replace(/^http:\/\//i, '').replace(/^https:\/\//i, '');
+  host = host.replace(/\/+$/, '');
+
+  let port = defaultPort;
+  if (host.includes(':')) {
+    const parts = host.split(':');
+    host = parts[0].trim();
+    const p = Number(parts[1]);
+    if (p && !isNaN(p)) port = p;
+  }
+  return { host, port };
 }
 
 function translatePgError(err: unknown, host: string, port: number, user: string, database: string): string {
   const msg = err instanceof Error ? err.message : String(err);
-  const isLan = isPrivateOrLocalHost(host);
 
   if (msg.includes('password authentication failed') || msg.includes('authentication failed')) {
     return `Falha de autenticação: A senha informada para o usuário '${user}' está incorreta no PostgreSQL (ou o usuário não possui permissão no banco '${database}'). Verifique se a senha é exatamente a mesma utilizada no DBeaver.`;
   }
-  if (msg.includes('server does not support SSL') || msg.includes('does not support SSL')) {
-    return `O servidor PostgreSQL em ${host}:${port} não aceita conexões criptografadas (está configurado com 'ssl = off' no postgresql.conf). Selecione a opção "Desativar SSL (Sem Criptografia)" na configuração do servidor para conectar com sucesso.`;
-  }
   if (msg.includes('no pg_hba.conf entry') && (msg.includes('no encryption') || msg.includes('SSL'))) {
-    return `O PostgreSQL exige conexão criptografada (SSL) de acordo com as regras do pg_hba.conf. Configure o Modo SSL como "Exigir SSL" ou "Automático".`;
+    return `O PostgreSQL exige conexão criptografada (SSL). O cliente tentou conectar sem SSL e foi bloqueado pelas regras do pg_hba.conf.`;
   }
   if (msg.includes('no pg_hba.conf entry')) {
     return `Acesso bloqueado pelo pg_hba.conf: O servidor PostgreSQL não tem permissão configurada para o IP de onde a aplicação está rodando. No servidor do banco, edite o arquivo pg_hba.conf e adicione uma regra liberando o host (exemplo: 'host all all 0.0.0.0/0 scram-sha-256') e execute 'SELECT pg_reload_conf();'.`;
   }
   if (msg.includes('database') && msg.includes('does not exist')) {
-    return `O banco de dados '${database}' não existe no PostgreSQL. No DBeaver você provavelmente conectou a outro banco de dados específico (ex: jdbc:postgresql://.../nome_do_banco). Informe no campo 'Banco de Dados Inicial' o nome exato do banco cadastrado no DBeaver.`;
+    return `O banco de dados '${database}' não existe no PostgreSQL. No DBeaver você provavelmente conectou a outro banco de dados. Informe no campo 'Banco de Dados Inicial' o nome exato do banco cadastrado.`;
   }
   if (msg.includes('permission denied for database')) {
     return `Permissão negada: O usuário '${user}' não tem permissão para conectar ao banco de dados '${database}'. Conecte ao banco de dados ao qual este usuário tem concessão (GRANT CONNECT ON DATABASE).`;
   }
-
-  // Diagnostics for Private IP vs Cloud application
-  if (isLan) {
-    if (msg.includes('ETIMEDOUT') || msg.includes('timeout') || msg.includes('ECONNREFUSED') || msg.includes('EHOSTUNREACH')) {
-      return `O IP '${host}' é um endereço de rede local/privada (LAN/VPN). O DBeaver conecta com sucesso porque ele roda instalado diretamente no seu computador físico dentro dessa mesma rede. No entanto, este painel web está hospedado em um container em nuvem (Google Cloud Run) e não alcança redes internas privadas. Para conectar: 1) Use o IP público da sua conexão com a porta ${port} redirecionada no roteador; 2) Crie um túnel seguro de 1 comando com ngrok ('ngrok tcp ${port}') e informe a URL gerada aqui; ou 3) Execute a aplicação localmente na mesma máquina onde o DBeaver está rodando.`;
-    }
-  }
-
   if (msg.includes('ECONNREFUSED')) {
     return `Conexão recusada em ${host}:${port}. Verifique se o serviço PostgreSQL está em execução e se o parâmetro 'listen_addresses' no postgresql.conf está como '*' (e não apenas 'localhost').`;
   }
   if (msg.includes('ETIMEDOUT') || msg.includes('timeout')) {
-    return `Tempo esgotado ao conectar em ${host}:${port}. Verifique se o Firewall do servidor permite conexões de entrada na porta ${port} para conexões externas e se o IP é público.`;
+    return `Tempo esgotado ao conectar em ${host}:${port}. Verifique se o Firewall do servidor permite conexões de entrada na porta ${port} e se as duas máquinas estão na mesma rede/sub-rede.`;
   }
-  if (msg.includes('ENOTFOUND') || msg.includes('EAI_AGAIN')) {
-    return `Host '${host}' não foi resolvido pelo DNS. Verifique se digitou o endereço IP ou domínio corretamente.`;
+  if (msg.includes('ENOTFOUND')) {
+    return `Host '${host}' não resolvido na rede. Se estiver usando o nome da máquina, tente usar o endereço IP fixo da máquina na rede local (ex: 192.168.x.x).`;
   }
   return msg;
 }
 
 export async function testAndFetchLivePgData(params: LiveConnectParams): Promise<LiveConnectResult> {
-  const parsed = parsePgHost(params.host, params.port || 5432);
-  const host = parsed.host;
-  const port = parsed.port;
-  const user = params.dbUser || parsed.user || 'postgres';
-  const database = params.database || parsed.database || 'postgres';
-  const password = params.dbPassword || parsed.password || '';
-  const effectiveSslMode = params.sslMode || parsed.sslMode;
-  const effectiveSsl = params.ssl !== undefined ? params.ssl : parsed.ssl;
+  const { host, port } = parsePgHost(params.host, params.port || 5432);
+  const user = params.dbUser || 'postgres';
+  const database = params.database || 'postgres';
+  const password = params.dbPassword || '';
 
-  // Configure SSL options based on user preference:
-  // - 'disable' or ssl === false: strictly unencrypted connection (never try SSL, compatible with ssl=off)
-  // - 'require' or ssl === true: strictly SSL connection (rejectUnauthorized: false)
-  // - 'auto' or default: try unencrypted first, fallback to SSL if server requires encryption
-  let sslOptions: Array<boolean | { rejectUnauthorized: boolean }>;
-
-  if (effectiveSslMode === 'disable' || effectiveSsl === false) {
-    sslOptions = [false];
-  } else if (effectiveSslMode === 'require' || effectiveSsl === true) {
-    sslOptions = [{ rejectUnauthorized: false }];
-  } else {
-    sslOptions = [false, { rejectUnauthorized: false }];
-  }
-
+  // Try standard connection first, with fallback to SSL (rejectUnauthorized: false) if required
   let client: pg.Client;
   let isConnected = false;
   let lastConnectErr: unknown = null;
+
+  const sslOptions = [false, { rejectUnauthorized: false }];
 
   for (const sslMode of sslOptions) {
     client = new pg.Client({
@@ -132,8 +96,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       user,
       password,
       database,
-      connectionTimeoutMillis: 8000,
-      statement_timeout: 8000,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 10000,
       ssl: sslMode
     });
 
@@ -145,22 +109,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       lastConnectErr = err;
       try { await client.end(); } catch {}
       const errMsg = err instanceof Error ? err.message : String(err);
-      // If error is network reachability failure, retrying with SSL won't help
-      if (
-        errMsg.includes('timeout') ||
-        errMsg.includes('ETIMEDOUT') ||
-        errMsg.includes('ECONNREFUSED') ||
-        errMsg.includes('ENOTFOUND') ||
-        errMsg.includes('EAI_AGAIN') ||
-        errMsg.includes('EHOSTUNREACH') ||
-        errMsg.includes('password authentication failed') ||
-        errMsg.includes('authentication failed') ||
-        (errMsg.includes('database') && errMsg.includes('does not exist'))
-      ) {
-        break;
-      }
-      // If user explicitly disabled SSL, do not attempt any further connection modes
-      if (effectiveSslMode === 'disable' || effectiveSsl === false) {
+      // If error is password failed or bad db name, retrying with SSL won't help
+      if (errMsg.includes('password authentication failed') || errMsg.includes('database') && errMsg.includes('does not exist')) {
         break;
       }
     }
@@ -629,8 +579,6 @@ export async function fetchLiveConnectionsForDb(params: {
   dbUser?: string;
   dbPassword?: string;
   database?: string;
-  sslMode?: 'disable' | 'auto' | 'require';
-  ssl?: boolean;
 }): Promise<{
   success: boolean;
   queries: StuckQuery[];
@@ -657,9 +605,7 @@ export async function fetchLiveConnectionsForDb(params: {
     port: params.port || 5432,
     dbUser: params.dbUser || 'postgres',
     dbPassword: params.dbPassword || '',
-    database: targetDb,
-    sslMode: params.sslMode,
-    ssl: params.ssl
+    database: targetDb
   });
 
   // If connection failed (e.g., target database was dropped), retry with 'postgres' default database
@@ -669,9 +615,7 @@ export async function fetchLiveConnectionsForDb(params: {
       port: params.port || 5432,
       dbUser: params.dbUser || 'postgres',
       dbPassword: params.dbPassword || '',
-      database: 'postgres',
-      sslMode: params.sslMode,
-      ssl: params.ssl
+      database: 'postgres'
     });
   }
 
