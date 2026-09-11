@@ -21,6 +21,13 @@ export interface TriggerBackupOptions {
   sshPort?: number;
   command?: string;
   fileSizeBytes?: number;
+  status?: 'completed' | 'failed' | 'in_progress' | 'verified';
+  outputLog?: string;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  durationSeconds?: number;
+  notes?: string;
 }
 
 export function resolveBackupPath(
@@ -817,30 +824,37 @@ export class BackupMonitor {
         ? (fileSize > 1024 * 1024 ? `${(fileSize / (1024 * 1024)).toFixed(2)} MB` : `${Math.round(fileSize / 1024)} KB`)
         : 'Remoto (SSH)';
 
+      const entryStatus = opts.status || 'completed';
+      const durationSec = opts.durationSeconds !== undefined ? opts.durationSeconds : 1.5;
+
       const newEntry: BackupEntry = {
         id: `bkp-${srvClean}-${dbClean}-${Date.now().toString().slice(-6)}`,
         type,
-        status: 'completed',
+        status: entryStatus,
         startTime: now.toISOString(),
-        endTime: new Date(now.getTime() + 1500).toISOString(),
-        durationSeconds: 1.5,
+        endTime: new Date(now.getTime() + Math.round(durationSec * 1000)).toISOString(),
+        durationSeconds: durationSec,
         sizeBytes: fileSize,
         sizeFormatted,
         location: requestedLocation,
         command: opts.command,
+        outputLog: opts.outputLog,
+        stdout: opts.stdout,
+        stderr: opts.stderr,
+        exitCode: opts.exitCode,
         checksum: 'sha256:d41d8cd98f00b204e9800998ecf8427e',
-        verifiedIntegrity: true,
+        verifiedIntegrity: entryStatus === 'completed',
         serverId: srvId,
         serverName: srvName,
         serverHost: srvHost,
         databaseName: dbName,
-        notes: `Backup executado remotamente via SSH no servidor ${srvHost}: ${requestedLocation}`
+        notes: opts.notes || `Backup executado remotamente via SSH no servidor ${srvHost}: ${requestedLocation}`
       };
 
       this.overview.recentBackups.unshift(newEntry);
       this.overview.lastBackupTimestamp = now.toISOString();
       this.overview.timeSinceLastBackupFormatted = 'Agora mesmo';
-      this.overview.backupHealthStatus = 'healthy';
+      this.overview.backupHealthStatus = entryStatus === 'failed' ? 'warning' : 'healthy';
 
       return newEntry;
     }

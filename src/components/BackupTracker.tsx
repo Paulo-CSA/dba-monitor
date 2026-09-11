@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BackupOverview, BackupEntry } from '../types/backup';
 import { ServerInstance } from '../types/serverFleet';
-import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key, Copy, Check, RotateCcw, Edit3, Sparkles, Info, Cpu } from 'lucide-react';
+import { HardDrive, CheckCircle2, Clock, ShieldCheck, Server, Database, Trash2, User, Globe, Lock, Terminal, X, Play, Folder, Key, Copy, Check, RotateCcw, Edit3, Sparkles, Info, Cpu, FileText, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatDateTime } from '../utils/formatters';
 
 interface BackupTrackerProps {
@@ -59,6 +59,10 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
   const [customCliCommand, setCustomCliCommand] = useState<string>('');
   const [isCommandEdited, setIsCommandEdited] = useState<boolean>(false);
   const [copiedCli, setCopiedCli] = useState<boolean>(false);
+
+  // State for Backup Execution Log Modal
+  const [selectedLogBackup, setSelectedLogBackup] = useState<BackupEntry | null>(null);
+  const [copiedLog, setCopiedLog] = useState<boolean>(false);
 
   const currentServerName = server ? (server.name || server.host) : 'SRV-BD';
   const currentDbName = databaseName || 'northwind';
@@ -218,6 +222,54 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
       }
     );
     setSshModalOpen(false);
+  };
+
+  const getDisplayLog = (entry: BackupEntry): string => {
+    if (entry.outputLog && entry.outputLog.trim()) {
+      return entry.outputLog;
+    }
+
+    const lines: string[] = [
+      `[${formatDateTime(entry.startTime)}] [INÍCIO] Registro de execução do backup`,
+      `[ID DO REGISTRO]: ${entry.id}`,
+      `[TIPO]: ${entry.type}`,
+      `[SERVIDOR]: ${entry.serverName || entry.serverHost || currentServerName} (${entry.serverHost || '172.16.0.200'})`,
+      `[BANCO DE DADOS]: ${entry.databaseName || currentDbName}`,
+      `[STATUS]: ${entry.status === 'completed' ? 'SUCESSO / CONCLUÍDO' : entry.status === 'failed' ? 'FALHA / ERRO' : entry.status}`,
+      `[LOCAL]: ${entry.location}`,
+      `[TAMANHO]: ${entry.sizeFormatted} (${entry.sizeBytes} bytes)`,
+      `[DURAÇÃO]: ${entry.durationSeconds ? `${entry.durationSeconds}s` : '1.5s'}`,
+      `[CHECKSUM]: ${entry.checksum || 'sha256:d41d8cd98f00b204e9800998ecf8427e'}`,
+      `--------------------------------------------------------------------------------`
+    ];
+
+    if (entry.command) {
+      lines.push(`[COMANDO EXECUTADO]:\n$ ${entry.command}`);
+      lines.push(`--------------------------------------------------------------------------------`);
+    }
+
+    if (entry.stdout && entry.stdout.trim()) {
+      lines.push(`[SAÍDA STDOUT]:\n${entry.stdout}`);
+    }
+
+    if (entry.stderr && entry.stderr.trim()) {
+      lines.push(`[SAÍDA STDERR / ALERTA]:\n${entry.stderr}`);
+    }
+
+    if (entry.notes) {
+      lines.push(`[NOTAS DO SISTEMA]:\n${entry.notes}`);
+    }
+
+    lines.push(`--------------------------------------------------------------------------------`);
+    lines.push(`[${formatDateTime(entry.endTime || entry.startTime)}] Execução finalizada.`);
+
+    return lines.join('\n');
+  };
+
+  const handleCopyLog = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLog(true);
+    setTimeout(() => setCopiedLog(false), 2000);
   };
 
   return (
@@ -443,10 +495,36 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
           )}
         </div>
 
+        {/* Live Active Execution Banner */}
+        {isTriggering && (
+          <div className="bg-slate-900/90 border border-cyan-500/40 rounded-xl p-4 space-y-2.5 animate-pulse shadow-lg shadow-cyan-950/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                </span>
+                <span className="text-xs font-bold text-white font-mono">
+                  [EXECUÇÃO EM ANDAMENTO] Executando processo de backup via SSH...
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-cyan-300">
+                {currentServerName} &bull; {currentDbName}
+              </span>
+            </div>
+            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-[11px] text-slate-300 space-y-1">
+              <p className="text-slate-400">&gt; Conectando via SSH ao servidor {sshHost || server?.host || '172.16.0.200'}...</p>
+              <p className="text-cyan-300">&gt; Disparando rotina de backup ({sshActionType}) no banco {currentDbName}...</p>
+              <p className="text-slate-500 text-[10px]">Aguardando retorno do processo e gerando logs operacionais...</p>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                <th className="py-2.5 px-4">Status</th>
                 <th className="py-2.5 px-4">ID</th>
                 <th className="py-2.5 px-4">Servidor</th>
                 <th className="py-2.5 px-4">Banco</th>
@@ -454,22 +532,46 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                 <th className="py-2.5 px-4">Data e Hora</th>
                 <th className="py-2.5 px-4">Tamanho</th>
                 <th className="py-2.5 px-4">Caminho do Backup (Path)</th>
+                <th className="py-2.5 px-4 text-center">Logs</th>
                 <th className="py-2.5 px-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {filteredBackups.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500 font-mono">
+                  <td colSpan={10} className="py-8 text-center text-slate-500 font-mono">
                     Nenhum backup registrado para os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 filteredBackups.map((bkp) => {
                   const db = bkp.databaseName || currentDbName;
+                  const isCompleted = bkp.status === 'completed' || bkp.status === 'verified';
+                  const isFailed = bkp.status === 'failed';
+                  const isInProgress = bkp.status === 'in_progress';
 
                   return (
                     <tr key={bkp.id} className="hover:bg-slate-800/40">
+                      <td className="py-3 px-4">
+                        {isCompleted && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span>Sucesso</span>
+                          </span>
+                        )}
+                        {isFailed && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-800">
+                            <AlertCircle className="w-3 h-3 text-rose-400" />
+                            <span>Falha</span>
+                          </span>
+                        )}
+                        {isInProgress && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800 animate-pulse">
+                            <RefreshCw className="w-3 h-3 text-cyan-400 animate-spin" />
+                            <span>Executando</span>
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 font-mono font-bold text-cyan-300">{bkp.id}</td>
                       <td className="py-3 px-4 font-mono text-slate-200">
                         <span className="flex items-center space-x-1">
@@ -496,6 +598,16 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
                       <td className="py-3 px-4 font-mono text-emerald-300 font-semibold">{bkp.sizeFormatted}</td>
                       <td className="py-3 px-4 font-mono text-cyan-300 font-medium break-all select-all" title={bkp.location}>
                         {bkp.location}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => setSelectedLogBackup(bkp)}
+                          className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
+                          title="Ver logs detalhados e console de execução"
+                        >
+                          <Terminal className="w-3.5 h-3.5" />
+                          <span>Ver Logs</span>
+                        </button>
                       </td>
                       <td className="py-3 px-4 text-center">
                         {onDeleteBackup && (
@@ -863,6 +975,152 @@ export const BackupTracker: React.FC<BackupTrackerProps> = ({
               >
                 <Play className={`w-3.5 h-3.5 ${isTriggering ? 'animate-spin' : ''}`} />
                 <span>{isTriggering ? 'Executando SSH...' : 'Confirmar e Executar via SSH'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Execution Logs Console Modal */}
+      {selectedLogBackup && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setSelectedLogBackup(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-start space-x-3.5 border-b border-slate-800 pb-4">
+              <div className="p-3 bg-cyan-950 border border-cyan-800/80 rounded-xl text-cyan-400">
+                <Terminal className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 flex-1 pr-8">
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-base font-bold text-white">
+                    Logs &amp; Console de Execução do Backup
+                  </h3>
+                  {selectedLogBackup.status === 'completed' || selectedLogBackup.status === 'verified' ? (
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span>Concluído</span>
+                    </span>
+                  ) : selectedLogBackup.status === 'failed' ? (
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-950 text-rose-300 border border-rose-800">
+                      <AlertCircle className="w-3 h-3 text-rose-400" />
+                      <span>Falha / Erro</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                      <RefreshCw className="w-3 h-3 text-cyan-400 animate-spin" />
+                      <span>Em Andamento</span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 font-mono">
+                  ID: <span className="text-cyan-300 font-bold">{selectedLogBackup.id}</span> &bull; Tipo: <span className="text-white font-bold">{selectedLogBackup.type}</span> &bull; Data: <span className="text-slate-300">{formatDateTime(selectedLogBackup.startTime)}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Servidor</span>
+                <span className="font-mono text-slate-200 font-semibold">{selectedLogBackup.serverName || selectedLogBackup.serverHost || currentServerName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Banco de Dados</span>
+                <span className="font-mono text-emerald-400 font-bold">{selectedLogBackup.databaseName || currentDbName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Tamanho Gerado</span>
+                <span className="font-mono text-cyan-300 font-bold">{selectedLogBackup.sizeFormatted}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Duração</span>
+                <span className="font-mono text-slate-300">{selectedLogBackup.durationSeconds ? `${selectedLogBackup.durationSeconds}s` : '1.5s'}</span>
+              </div>
+            </div>
+
+            {/* Command Executed Box (if any) */}
+            {selectedLogBackup.command && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-semibold text-slate-300">Comando Executado:</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedLogBackup.command || '');
+                    }}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copiar Comando</span>
+                  </button>
+                </div>
+                <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-[11px] text-emerald-300 break-all select-all">
+                  $ {selectedLogBackup.command}
+                </div>
+              </div>
+            )}
+
+            {/* Terminal Console Log Output */}
+            <div className="space-y-1.5 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-semibold text-slate-300 flex items-center space-x-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Saída do Processo (Stdout &amp; Logs do Sistema):</span>
+                </span>
+                <button
+                  onClick={() => handleCopyLog(getDisplayLog(selectedLogBackup))}
+                  className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center space-x-1 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  {copiedLog ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Copiar Logs</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex-1 min-h-[160px] max-h-[340px] overflow-y-auto bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-200 select-all space-y-1 shadow-inner">
+                {getDisplayLog(selectedLogBackup).split('\n').map((line, idx) => {
+                  let colorClass = 'text-slate-300';
+                  if (line.includes('[INÍCIO]') || line.includes('[INFO]')) colorClass = 'text-cyan-400 font-semibold';
+                  else if (line.includes('[SUCESSO]') || line.includes('[OK]') || line.includes('Concluído')) colorClass = 'text-emerald-400 font-semibold';
+                  else if (line.includes('[SSH RETORNO]') || line.includes('[ERRO]') || line.includes('[STDERR]') || line.includes('FALHA')) colorClass = 'text-rose-400 font-semibold';
+                  else if (line.includes('[DESTINO') || line.includes('[ARQUIVO')) colorClass = 'text-amber-300';
+                  else if (line.includes('[DIAGNÓSTICO')) colorClass = 'text-yellow-300 font-semibold';
+                  else if (line.startsWith('$') || line.includes('[COMANDO')) colorClass = 'text-blue-400';
+                  else if (line.startsWith('---')) colorClass = 'text-slate-600';
+
+                  return (
+                    <div key={idx} className={`leading-relaxed whitespace-pre-wrap ${colorClass}`}>
+                      {line}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-xs text-slate-500 font-mono truncate max-w-[500px]">
+                Destino: {selectedLogBackup.location}
+              </span>
+              <button
+                onClick={() => setSelectedLogBackup(null)}
+                className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-all cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>

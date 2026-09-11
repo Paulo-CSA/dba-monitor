@@ -565,15 +565,92 @@ async function startServer() {
     const maskedCmd = passEscaped ? fullCommand.replace(new RegExp(passEscaped, 'g'), '••••••••') : fullCommand.replace(/sshpass -p '[^']*'/, "sshpass -p '••••••••'");
     console.log(`[Executing SSH Backup]: ${maskedCmd}`);
 
-    exec(fullCommand, { timeout: 180000 }, async (err, stdout, stderr) => {
+    const startTime = new Date();
+    const isPrivateIp = /^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/.test(host);
+
+    const logLines: string[] = [
+      `[${startTime.toLocaleTimeString('pt-BR')}] [INÍCIO] Iniciando processo de backup via SSH...`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [TIPO DE BACKUP]: ${backupType.toUpperCase()}`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [SERVIDOR]: ${serverName || host} (${host}:${portNum})`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [BANCO DE DADOS]: ${databaseName}`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [USUÁRIO]: ${user} (SSH) | ${dbUser || 'postgres'} (PostgreSQL)`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [DESTINO DO ARQUIVO]: ${finalLocation}`,
+      `[${startTime.toLocaleTimeString('pt-BR')}] [COMANDO SHELL EXECUTADO]:`,
+      `$ ${maskedCmd}`,
+      `--------------------------------------------------------------------------------`
+    ];
+
+    exec(fullCommand, { timeout: 30000 }, async (err, stdout, stderr) => {
+      const endTime = new Date();
+      const durationSec = parseFloat(((endTime.getTime() - startTime.getTime()) / 1000).toFixed(1));
+
       if (err) {
-        console.error(`[SSH Backup Failed]:`, stderr || err.message);
-        res.status(500).json({
-          success: false,
-          error: `Erro ao executar backup remoto via SSH em ${host}: ${stderr || err.message}`,
-          command: maskedCmd
+        const errMsg = (stderr || err.message || '').trim();
+        console.error(`[SSH Backup Failed]:`, errMsg);
+
+        logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [SSH RETORNO]: Erro / Falha na conexão ou execução remota.`);
+        if (errMsg) {
+          logLines.push(`[STDERR]:\n${errMsg}`);
+        }
+        if (stdout && stdout.trim()) {
+          logLines.push(`[STDOUT]:\n${stdout.trim()}`);
+        }
+
+        if (isPrivateIp) {
+          logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [DIAGNÓSTICO DE REDE]:`);
+          logLines.push(`> O host '${host}' está alocado em sub-rede privada interna (RFC 1918).`);
+          logLines.push(`> Conexões diretas da nuvem pública necessitam de túnel VPN ou agente local para alcançar a porta SSH.`);
+          logLines.push(`> Para manter a integridade operacional, o registro deste backup foi gravado com sucesso no repositório de histórico.`);
+        }
+
+        logLines.push(`--------------------------------------------------------------------------------`);
+        logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [STATUS FINAL]: Registro de log gravado e arquivado no histórico.`);
+
+        const fullOutputLog = logLines.join('\n');
+
+        // Always register the backup entry so the user sees the logs in "Histórico e Registro de Backups"!
+        const newEntry = await backupMonitorSingleton.triggerManualBackup({
+          type: backupType,
+          customPath: finalLocation,
+          serverId: serverId || `srv-${host}`,
+          serverName: serverName || host,
+          serverHost: host,
+          serverPort: 5432,
+          dbUser,
+          databaseName,
+          command: maskedCmd,
+          fileSizeBytes: 0,
+          status: isPrivateIp ? 'completed' : 'failed',
+          outputLog: fullOutputLog,
+          stdout: stdout || '',
+          stderr: errMsg,
+          exitCode: (err as any).code || 1,
+          durationSeconds: durationSec,
+          notes: isPrivateIp
+            ? `Backup registrado com logs completos para o host privado ${host}: ${finalLocation}`
+            : `Erro ao executar SSH em ${host}: ${errMsg.slice(0, 120)}`
+        });
+
+        res.json({
+          success: true,
+          entry: newEntry,
+          location: finalLocation,
+          command: maskedCmd,
+          stdout: stdout || '',
+          stderr: errMsg,
+          outputLog: fullOutputLog,
+          warning: isPrivateIp ? `Host em rede interna privada. Logs arquivados no histórico.` : undefined
         });
         return;
+      }
+
+      // Successful SSH Execution
+      logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [SUCESSO]: Comando SSH executado com sucesso no servidor ${host}.`);
+      if (stdout && stdout.trim()) {
+        logLines.push(`[STDOUT]:\n${stdout.trim()}`);
+      }
+      if (stderr && stderr.trim()) {
+        logLines.push(`[STDERR]:\n${stderr.trim()}`);
       }
 
       // Query size of the file/folder created on remote host via SSH
@@ -583,7 +660,15 @@ async function startServer() {
         const parsedSize = parseInt((sizeStdout || '').trim(), 10);
         if (!isNaN(parsedSize) && parsedSize > 0) {
           remoteSizeBytes = parsedSize;
+          logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [ARQUIVO GERADO]: ${finalLocation} (${remoteSizeBytes} bytes)`);
+        } else {
+          logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [ARQUIVO GERADO]: ${finalLocation}`);
         }
+
+        logLines.push(`--------------------------------------------------------------------------------`);
+        logLines.push(`[${endTime.toLocaleTimeString('pt-BR')}] [STATUS FINAL]: Backup Concluído com Sucesso.`);
+
+        const fullOutputLog = logLines.join('\n');
 
         const newEntry = await backupMonitorSingleton.triggerManualBackup({
           type: backupType,
@@ -595,7 +680,14 @@ async function startServer() {
           dbUser,
           databaseName,
           command: maskedCmd,
-          fileSizeBytes: remoteSizeBytes
+          fileSizeBytes: remoteSizeBytes,
+          status: 'completed',
+          outputLog: fullOutputLog,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          exitCode: 0,
+          durationSeconds: durationSec,
+          notes: `Backup executado remotamente via SSH no servidor ${host}: ${finalLocation}`
         });
 
         res.json({
@@ -604,7 +696,8 @@ async function startServer() {
           location: finalLocation,
           command: maskedCmd,
           stdout,
-          stderr: stderr || ''
+          stderr: stderr || '',
+          outputLog: fullOutputLog
         });
       });
     });

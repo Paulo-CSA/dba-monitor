@@ -503,14 +503,44 @@ export default function App() {
         if (data.success && data.entry) {
           setBackupOverview((prev) => {
             if (!prev) return prev;
+            const filtered = prev.recentBackups.filter((b) => b.id !== data.entry.id);
             return {
               ...prev,
               lastBackupTimestamp: data.entry.startTime,
               timeSinceLastBackupFormatted: 'Agora mesmo',
-              recentBackups: [data.entry, ...prev.recentBackups]
+              recentBackups: [data.entry, ...filtered]
             };
           });
         }
+      } else {
+        try {
+          const errData = await res.json();
+          if (errData?.entry) {
+            setBackupOverview((prev) => {
+              if (!prev) return prev;
+              const filtered = prev.recentBackups.filter((b) => b.id !== errData.entry.id);
+              return {
+                ...prev,
+                recentBackups: [errData.entry, ...filtered]
+              };
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // Sync latest overview from server
+      try {
+        const freshRes = await fetch('/api/db/backups');
+        if (freshRes.ok) {
+          const freshData = await freshRes.json();
+          if (freshData.success && freshData.overview) {
+            setBackupOverview(freshData.overview);
+          }
+        }
+      } catch {
+        // ignore
       }
     } catch (err) {
       console.error('Backup trigger error:', err);

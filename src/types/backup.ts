@@ -9,6 +9,10 @@ export interface BackupEntry {
   sizeFormatted: string;
   location: string;
   command?: string;
+  outputLog?: string;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
   checksum: string;
   verifiedIntegrity: boolean;
   notes?: string;
