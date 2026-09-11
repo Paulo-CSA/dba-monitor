@@ -223,22 +223,9 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Central de Alertas e Notificações Ativas (Posicionado logo abaixo do Header) }
+      {/* Central de Alertas e Notificações Ativas (Posicionado logo abaixo do Header)*/}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Central de Alertas e Notificações Ativas</h2>
-              <p className="text-xs text-slate-400">Avisos automáticos de CPU, conexões, queries lentas e locks</p>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-amber-950 text-amber-300 border border-amber-800">
-            {activeAlerts.length} Alerta(s) Ativo(s)
-          </span>
-        </div>*/}
+       
 
         {activeAlerts.length === 0 ? (
           <div className="p-6 bg-emerald-950/30 border border-emerald-800/60 rounded-xl text-center space-y-2">
