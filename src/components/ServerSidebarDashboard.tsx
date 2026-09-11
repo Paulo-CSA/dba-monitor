@@ -84,8 +84,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'databases' | 'metrics' | 'queries_locks'>('databases');
   const [editingServer, setEditingServer] = useState<ServerInstance | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [showAddDbModal, setShowAddDbModal] = useState(false);
-  const [newDbInput, setNewDbInput] = useState('');
   const [dbToDelete, setDbToDelete] = useState<string | null>(null);
 
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
@@ -409,18 +407,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           )}
         </div>
 
-        {/* Sidebar Footer Status Indicator */}
-        <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-400 flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-          <div className="flex items-center space-x-1.5 text-cyan-400 font-bold">
-            <Server className="w-3.5 h-3.5" />
-            <span>Frota PostgreSQL</span>
-          </div>
-          <span className="text-emerald-400 font-mono flex items-center space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>Conectado</span>
-          </span>
-        </div>
-      </aside>
+ 
 
       {/* ================= MAIN CONTENT PANEL (INFORMACÕES DO SERVIDOR & BANCOS) ================= */}
       <main className="flex-1 space-y-6 min-w-0">
@@ -533,26 +520,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
             {/* TAB 1: DATABASES LIST & METRICS SUMMARY */}
             {activeTab === 'databases' && (
               <div className="space-y-6">
-                {/* Header with Add Database Action */}
-                <div className="flex items-center justify-between bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  <div className="flex items-center space-x-2">
-                    <Database className="w-4 h-4 text-cyan-400" />
-                    <span className="text-sm font-bold text-white">Bancos de Dados ({activeServer.databases.length})</span>
-                  </div>
-                  {onAddDatabase && (
-                    <button
-                      onClick={() => {
-                        setNewDbInput('');
-                        setShowAddDbModal(true);
-                      }}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Adicionar Banco</span>
-                    </button>
-                  )}
-                </div>
-
                 {/* Databases Grid Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {activeServer.databases.map((db) => {
@@ -818,74 +785,6 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           if (onDeleteServer) onDeleteServer(serverId);
         }}
       />
-
-      {/* Modal para Adicionar Banco de Dados */}
-      {showAddDbModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <Database className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold text-white">Adicionar Novo Banco</h3>
-              </div>
-              <button
-                onClick={() => setShowAddDbModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400">
-              Informe o nome do banco de dados a ser cadastrado e monitorado no servidor <strong>{activeServer?.name}</strong>.
-            </p>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newDbInput.trim() && onAddDatabase && activeServer) {
-                  onAddDatabase(activeServer.id, newDbInput.trim());
-                  setShowAddDbModal(false);
-                  setNewDbInput('');
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Nome do Banco de Dados (datname)
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  value={newDbInput}
-                  onChange={(e) => setNewDbInput(e.target.value)}
-                  placeholder="ex: app_production, erp_vendas, cliente_db"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowAddDbModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newDbInput.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  Cadastrar Banco
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Modal para Confirmar Exclusão de Banco de Dados */}
       {dbToDelete && (
