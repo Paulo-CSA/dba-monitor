@@ -223,67 +223,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Central de Alertas e Notificações Ativas (Posicionado logo abaixo do Header)*/}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-       
-
-        {activeAlerts.length === 0 ? (
-          <div className="p-6 bg-emerald-950/30 border border-emerald-800/60 rounded-xl text-center space-y-2">
-            <ShieldCheck className="w-8 h-8 text-emerald-400 mx-auto" />
-            <h3 className="text-sm font-bold text-emerald-300">Todos os Servidores Saudáveis</h3>
-            <p className="text-xs text-emerald-400/80 font-mono">
-              Nenhuma violação de limite ou alerta crítico detectado no momento. Todos os clusters estão operando dentro dos parâmetros ideais.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`p-3.5 rounded-xl border flex items-start space-x-3 transition-all ${
-                  alert.severity === 'critical'
-                    ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
-                    : 'bg-amber-950/40 border-amber-800/80 text-amber-200'
-                }`}
-              >
-                <AlertTriangle
-                  className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                    alert.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs truncate text-white">{alert.ruleName}</span>
-                    <span
-                      className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded font-mono ${
-                        alert.severity === 'critical'
-                          ? 'bg-rose-900 text-rose-200 border border-rose-700'
-                          : 'bg-amber-900 text-amber-200 border border-amber-700'
-                      }`}
-                    >
-                      {alert.severity === 'critical' ? 'CRÍTICO' : 'AVISO'}
-                    </span>
-                  </div>
-                  <p className="text-xs mt-1 font-mono leading-relaxed">{alert.message}</p>
-                  <div className="mt-2 flex items-center justify-between text-[10px] opacity-80 font-mono">
-                    <span>Host: {alert.serverHost} | {alert.triggeredAtFormatted}</span>
-                    {onAcknowledgeAlert && (
-                      <button
-                        onClick={() => onAcknowledgeAlert(alert.id, undefined, alert.ruleName.includes('(') ? alert.ruleName.split('(')[1]?.replace(')', '') : undefined)}
-                        className="px-2 py-0.5 rounded bg-slate-900/80 hover:bg-slate-800 text-white font-bold text-[10px] flex items-center space-x-1 border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer"
-                        title="Marcar como Ciente e silenciar alerta"
-                      >
-                        <Check className="w-3 h-3" />
-                        <span>Ciente</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      
 
       {/* Global Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
