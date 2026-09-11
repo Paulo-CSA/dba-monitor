@@ -38,7 +38,13 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         dbPassword: server.dbPassword || '',
         database: currentDb,
         environment: server.environment,
-        pgVersion: server.pgVersion
+        pgVersion: server.pgVersion,
+        snmpConfig: server.snmpConfig || {
+          enabled: true,
+          version: '2c',
+          community: 'n4tUr3Z4',
+          port: 161
+        }
       });
       setShowConfirmDelete(false);
       setShowPassword(false);
@@ -126,7 +132,13 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
       pgVersion: formData.pgVersion || server.pgVersion,
       totalDatabasesCount: server.databases.length,
-      databases: server.databases
+      databases: server.databases,
+      snmpConfig: formData.snmpConfig || {
+        enabled: true,
+        version: '2c',
+        community: 'n4tUr3Z4',
+        port: 161
+      }
     };
 
     onSave(updated);
@@ -346,6 +358,82 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Configurações SNMPv2c do Servidor */}
+          <div className="p-3 bg-slate-950 border border-indigo-900/60 rounded-xl space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-indigo-400 text-[11px] uppercase tracking-wider flex items-center space-x-1.5">
+                <Server className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Métricas do Servidor (SNMPv2c)</span>
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono font-bold">
+                Porta 161 UDP
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Versão</label>
+                <select
+                  value={formData.snmpConfig?.version || '2c'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    snmpConfig: {
+                      enabled: true,
+                      version: e.target.value as '2c' | '1' | '3',
+                      community: formData.snmpConfig?.community || 'n4tUr3Z4',
+                      port: formData.snmpConfig?.port || 161
+                    }
+                  })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="2c">2c (Padrão)</option>
+                  <option value="1">1</option>
+                  <option value="3">3</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Community</label>
+                <input
+                  type="text"
+                  value={formData.snmpConfig?.community ?? 'n4tUr3Z4'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    snmpConfig: {
+                      enabled: true,
+                      version: formData.snmpConfig?.version || '2c',
+                      community: e.target.value,
+                      port: formData.snmpConfig?.port || 161
+                    }
+                  })}
+                  placeholder="n4tUr3Z4"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-cyan-300 font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Porta UDP</label>
+                <input
+                  type="number"
+                  value={formData.snmpConfig?.port || 161}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    snmpConfig: {
+                      enabled: true,
+                      version: formData.snmpConfig?.version || '2c',
+                      community: formData.snmpConfig?.community || 'n4tUr3Z4',
+                      port: Number(e.target.value) || 161
+                    }
+                  })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 italic">
+              Coleta uso de CPU, memória RAM e volumes de armazenamento via MIB-II e UCD-SNMP.
+            </p>
           </div>
 
           {/* Ambiente */}

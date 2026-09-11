@@ -22,6 +22,7 @@ import { testAndFetchLivePgData, fetchLiveConnectionsForDb } from './src/service
 import { testAndFetchLiveMssqlData, killMssqlSession } from './src/services/mssqlService';
 import { testAndFetchLiveMysqlData } from './src/services/mysqlService';
 import { dispatchTestConnection } from './src/services/engineDispatcher';
+import { snmpServiceSingleton } from './src/services/snmpService';
 import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
@@ -794,6 +795,108 @@ Responda em formato Markdown estruturado em Português.`;
         details: err instanceof Error ? err.message : String(err)
       });
     }
+  });
+
+  // SNMPv2c Metrics endpoint (CPU, Memória, Armazenamento)
+  app.get('/api/snmp/metrics', async (req, res) => {
+    try {
+      const { serverId, host, community, version, port } = req.query;
+      let targetHost = typeof host === 'string' && host.trim() ? host.trim() : '127.0.0.1';
+      let targetCommunity = typeof community === 'string' && community.trim() ? community.trim() : 'n4tUr3Z4';
+      let targetVersion: '2c' | '1' | '3' = (version === '1' || version === '3') ? version : '2c';
+      let targetPort = Number(port) || 161;
+      let sid = typeof serverId === 'string' ? serverId : '';
+
+      if (sid) {
+        const srv = activeServersStore.find((s) => s.id === sid);
+        if (srv) {
+          targetHost = srv.host || targetHost;
+          if (srv.snmpConfig) {
+            targetCommunity = srv.snmpConfig.community || targetCommunity;
+            targetVersion = srv.snmpConfig.version || targetVersion;
+            targetPort = srv.snmpConfig.port || targetPort;
+          }
+        }
+      }
+
+      const metrics = await snmpServiceSingleton.getMetricsForServer(
+        sid || targetHost,
+        targetHost,
+        targetCommunity,
+        targetVersion,
+        targetPort
+      );
+
+      // Cache on server in memory
+      if (sid) {
+        activeServersStore = activeServersStore.map((s) => {
+          if (s.id === sid) {
+            return {
+              ...s,
+              snmpMetrics: metrics,
+              cpuUsagePercent: metrics.cpu.usagePercent,
+              ramUsagePercent: metrics.memory.usedPercent,
+              ramTotalMb: Math.round(metrics.memory.totalBytes / (1024 * 1024)),
+              ramUsedMb: Math.round(metrics.memory.usedBytes / (1024 * 1024))
+            };
+          }
+          return s;
+        });
+      }
+
+      res.json(metrics);
+    } catch (err: any) {
+      console.error('Error in /api/snmp/metrics:', err);
+      res.status(500).json({ error: err?.message || 'Falha ao obter métricas SNMP' });
+    }
+  });
+
+  // Test SNMP Connection
+  app.post('/api/snmp/test', async (req, res) => {
+    try {
+      const { host, community = 'n4tUr3Z4', version = '2c', port = 161 } = req.body || {};
+      if (!host) {
+        res.status(400).json({ success: false, message: 'Host é obrigatório.' });
+        return;
+      }
+      const result = await snmpServiceSingleton.queryLiveSnmp(
+        host.trim(),
+        community.trim(),
+        version === '1' ? '1' : '2c',
+        Number(port) || 161,
+        2500
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Erro ao testar SNMP' });
+    }
+  });
+
+  // Update SNMP Config for a Server
+  app.post('/api/snmp/config', (req, res) => {
+    const { serverId, snmpConfig } = req.body;
+    if (!serverId || !snmpConfig) {
+      res.status(400).json({ success: false, message: 'serverId e snmpConfig são obrigatórios.' });
+      return;
+    }
+
+    activeServersStore = activeServersStore.map((s) => {
+      if (s.id === serverId) {
+        return {
+          ...s,
+          snmpConfig: {
+            enabled: snmpConfig.enabled ?? true,
+            version: snmpConfig.version || '2c',
+            community: snmpConfig.community || 'n4tUr3Z4',
+            port: Number(snmpConfig.port) || 161
+          }
+        };
+      }
+      return s;
+    });
+
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
   });
 
   // Vite Middleware for Dev, Static serving for Production

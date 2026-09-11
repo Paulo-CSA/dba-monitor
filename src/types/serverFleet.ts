@@ -1,5 +1,6 @@
 import { FileLocationSetting } from './config';
 import { StuckQuery } from './locks';
+import { SnmpConfig, SnmpServerMetrics } from '../services/snmpService';
 
 export interface TableSizeInfo {
   schemaName: string;
@@ -56,4 +57,7 @@ export interface ServerInstance {
   fileLocations?: FileLocationSetting[];
   stuckQueries?: StuckQuery[];
   topTables?: TableSizeInfo[];
+  snmpConfig?: SnmpConfig;
+  snmpMetrics?: SnmpServerMetrics;
 }
+

@@ -178,6 +178,18 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('server_metrics')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+              activeTab === 'server_metrics'
+                ? 'bg-blue-600/20 text-cyan-300 border border-cyan-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Server className="w-4 h-4 text-indigo-400" />
+            <span>Métricas do Servidor (SNMP)</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('stuck_locks')}
             className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
               activeTab === 'stuck_locks'
