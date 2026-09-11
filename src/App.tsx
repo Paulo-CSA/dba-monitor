@@ -17,7 +17,6 @@ import { ServerFleetOverview } from './components/ServerFleetOverview';
 import { ServerSidebarDashboard } from './components/ServerSidebarDashboard';
 import { GlobalDashboardView } from './components/GlobalDashboardView';
 import { SelectedServerContextBar } from './components/SelectedServerContextBar';
-import { ServerMetricsView } from './components/ServerMetricsView';
 import { ServerInstance, DatabaseInfo, TableSizeInfo } from './types/serverFleet';
 import { RealtimeMetricsPayload } from './types/metrics';
 import { PgSystemConfig } from './types/config';
@@ -32,7 +31,7 @@ import { exportToPDF } from './utils/pdfExporter';
 import { analyzeQueryWithAI } from './services/aiDiagnosticService';
 import { formatMs, formatBytes, formatUptimeSeconds } from './utils/formatters';
 
-import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus, Database, ArrowRight } from 'lucide-react';
+import { Clock, Cpu, Users, HardDrive, Zap, CheckCircle2, AlertTriangle, Activity, Server, Plus, Database } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -216,7 +215,9 @@ export default function App() {
                 dbPassword: srv.dbPassword,
                 database: targetDb,
                 serverId: srv.id,
-                engine: srv.engine
+                engine: srv.engine,
+                sslMode: srv.sslMode,
+                ssl: srv.ssl
               })
             });
 
@@ -750,6 +751,8 @@ export default function App() {
     database?: string;
     engine?: 'postgres' | 'mysql' | 'mssql';
     authMode?: string;
+    sslMode?: 'disable' | 'auto' | 'require';
+    ssl?: boolean;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -784,6 +787,8 @@ export default function App() {
       port: serverData.port || 5432,
       engine: serverData.engine || 'postgres',
       authMode: serverData.authMode || (serverData.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
+      sslMode: serverData.sslMode,
+      ssl: serverData.ssl,
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
       environment: serverData.environment || 'Produção',
@@ -803,12 +808,6 @@ export default function App() {
       totalSizeFormatted: sizeFormatted,
       status: 'healthy',
       databases: databasesList,
-      snmpConfig: {
-        enabled: true,
-        version: '2c',
-        community: 'n4tUr3Z4',
-        port: 161
-      },
       topTables: serverData.liveTopTables && serverData.liveTopTables.length > 0 ? serverData.liveTopTables : undefined,
       fileLocations: serverData.liveFileLocations && serverData.liveFileLocations.length > 0 ? serverData.liveFileLocations : undefined,
       stuckQueries: serverData.liveQueries && serverData.liveQueries.length > 0 ? serverData.liveQueries : undefined
@@ -1051,7 +1050,6 @@ export default function App() {
             onSelectServer={(serverId) => handleSelectServer(serverId)}
             onSelectDatabase={(datname) => setSelectedDatabaseName(datname)}
             silencedDbs={silencedDbs}
-            onNavigateToServerMetrics={() => setActiveTab('server_metrics')}
           />
         )}
 
@@ -1102,33 +1100,6 @@ export default function App() {
         {activeTab === 'metrics' && (
           activeServerMetrics ? (
             <div className="space-y-6">
-              {/* Quick Jump to SNMP Server Hardware Metrics Banner */}
-              <div className="bg-gradient-to-r from-indigo-950/60 via-slate-900/80 to-slate-900/60 border border-indigo-800/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-md">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-                    <Server className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-white">Métricas de Hardware do Servidor (SNMPv2c)</span>
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-cyan-300 font-mono text-[10px] border border-indigo-700/60">
-                        community: {activeServerObject?.snmpConfig?.community || 'n4tUr3Z4'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Monitore CPU total, memória RAM real, discos/partições e carga dos núcleos do host {activeServerObject?.host || '192.168.1.50'}.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setActiveTab('server_metrics')}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center space-x-1.5 flex-shrink-0 cursor-pointer"
-                >
-                  <span>Abrir Métricas do Servidor</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
               {/* Top KPI Metric Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
@@ -1209,19 +1180,6 @@ export default function App() {
                 killingPid={killingPid}
               />
             </div>
-          ) : (
-            renderEmptyServerState()
-          )
-        )}
-
-        {/* TAB 1.5: SERVER SPECIFIC HARDWARE METRICS (SNMPv2c) */}
-        {activeTab === 'server_metrics' && (
-          activeServerObject ? (
-            <ServerMetricsView
-              server={activeServerObject}
-              onSwitchToDbMetrics={() => setActiveTab('metrics')}
-              onUpdateServer={handleUpdateServer}
-            />
           ) : (
             renderEmptyServerState()
           )

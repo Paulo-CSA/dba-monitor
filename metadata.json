@@ -1,6 +1,6 @@
 {
   "name": "PgMonitor - Database Monitoring",
-  "description": "Multi-Engine Database & Server Monitoring Dashboard (PostgreSQL, MySQL, Microsoft SQL Server) with SNMPv2c Hardware Metrics (CPU, Memory, Storage), Real-time Latency, Stuck Queries & Locks, Backup Tracking, Custom Alerts, and CSV/PDF Export.",
+  "description": "Multi-Engine Database Monitoring Dashboard (PostgreSQL, MySQL, Microsoft SQL Server) with Real-time CPU & Latency Metrics, File Locations, Health Checks, Stuck Queries & Locks, Backup Tracking, Custom Alerts, and CSV/PDF Export.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

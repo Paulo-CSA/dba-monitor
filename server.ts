@@ -22,7 +22,6 @@ import { testAndFetchLivePgData, fetchLiveConnectionsForDb } from './src/service
 import { testAndFetchLiveMssqlData, killMssqlSession } from './src/services/mssqlService';
 import { testAndFetchLiveMysqlData } from './src/services/mysqlService';
 import { dispatchTestConnection } from './src/services/engineDispatcher';
-import { snmpServiceSingleton } from './src/services/snmpService';
 import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
@@ -84,7 +83,7 @@ async function startServer() {
 
   // Test connection to live database endpoint (PostgreSQL, MySQL, Microsoft SQL Server)
   app.post('/api/db/test-connection', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, engine, authMode } = req.body;
+    const { host, port, dbUser, dbPassword, database, engine, authMode, sslMode, ssl } = req.body;
     const result = await dispatchTestConnection({
       host,
       port: Number(port) || (engine === 'mysql' ? 3306 : engine === 'mssql' ? 1433 : 5432),
@@ -92,7 +91,9 @@ async function startServer() {
       dbPassword,
       database,
       engine: engine || 'postgres',
-      authMode: authMode || (engine === 'mssql' ? 'SQL Server Authentication' : undefined)
+      authMode: authMode || (engine === 'mssql' ? 'SQL Server Authentication' : undefined),
+      sslMode,
+      ssl
     });
     res.json(result);
   });
@@ -221,13 +222,15 @@ async function startServer() {
 
   // Fetch live active connections specifically for a database
   app.post('/api/db/fetch-live-connections', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, serverId, engine: reqEngine } = req.body;
+    const { host, port, dbUser, dbPassword, database, serverId, engine: reqEngine, sslMode: reqSslMode, ssl: reqSsl } = req.body;
     
     let targetHost = host;
     let targetPort = port;
     let targetUser = dbUser;
     let targetPassword = dbPassword;
     let targetEngine = reqEngine || 'postgres';
+    let targetSslMode = reqSslMode;
+    let targetSsl = reqSsl;
 
     if (serverId && typeof serverId === 'string') {
       const foundSrv = activeServersStore.find((s) => s.id === serverId);
@@ -237,6 +240,8 @@ async function startServer() {
         targetUser = targetUser || foundSrv.dbUser;
         targetPassword = targetPassword || foundSrv.dbPassword;
         targetEngine = foundSrv.engine || targetEngine;
+        if (targetSslMode === undefined) targetSslMode = foundSrv.sslMode;
+        if (targetSsl === undefined) targetSsl = foundSrv.ssl;
       }
     }
 
@@ -334,7 +339,9 @@ async function startServer() {
       port: Number(targetPort) || 5432,
       dbUser: targetUser,
       dbPassword: targetPassword,
-      database
+      database,
+      sslMode: targetSslMode,
+      ssl: targetSsl
     });
 
     if (result.success && result.databases && serverId) {
@@ -359,16 +366,16 @@ async function startServer() {
 
   // Kill stuck backend session (SELECT pg_terminate_backend(pid) or KILL <session_id>)
   app.post('/api/db/kill-pid', async (req, res) => {
-    const { pid, host, port, dbUser, dbPassword, database, engine, serverId } = req.body;
+    const { pid, host, port, dbUser, dbPassword, database, engine, serverId, sslMode: reqSslMode, ssl: reqSsl } = req.body;
     if (!pid || typeof pid !== 'number') {
       res.status(400).json({ success: false, message: 'PID numérico inválido.' });
       return;
     }
 
+    const matchedSrv = serverId ? activeServersStore.find((s) => s.id === serverId) : undefined;
     let targetEngine = engine;
     if (!targetEngine && serverId) {
-      const srv = activeServersStore.find((s) => s.id === serverId);
-      if (srv) targetEngine = srv.engine;
+      if (matchedSrv) targetEngine = matchedSrv.engine;
     }
 
     if (targetEngine === 'mssql') {
@@ -389,13 +396,23 @@ async function startServer() {
 
     // Try live pg termination if external host provided
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      const effectiveSslMode = reqSslMode ?? matchedSrv?.sslMode;
+      const effectiveSsl = reqSsl ?? matchedSrv?.ssl;
+      let clientSsl: boolean | { rejectUnauthorized: boolean } = false;
+      if (effectiveSslMode === 'require' || effectiveSsl === true) {
+        clientSsl = { rejectUnauthorized: false };
+      } else if (effectiveSslMode === 'disable' || effectiveSsl === false) {
+        clientSsl = false;
+      }
+
       const client = new pg.Client({
         host,
         port: Number(port) || 5432,
         user: dbUser || 'postgres',
         password: dbPassword || '',
         database: database || 'postgres',
-        connectionTimeoutMillis: 3500
+        connectionTimeoutMillis: 3500,
+        ssl: clientSsl
       });
 
       try {
@@ -795,108 +812,6 @@ Responda em formato Markdown estruturado em Português.`;
         details: err instanceof Error ? err.message : String(err)
       });
     }
-  });
-
-  // SNMPv2c Metrics endpoint (CPU, Memória, Armazenamento)
-  app.get('/api/snmp/metrics', async (req, res) => {
-    try {
-      const { serverId, host, community, version, port } = req.query;
-      let targetHost = typeof host === 'string' && host.trim() ? host.trim() : '127.0.0.1';
-      let targetCommunity = typeof community === 'string' && community.trim() ? community.trim() : 'n4tUr3Z4';
-      let targetVersion: '2c' | '1' | '3' = (version === '1' || version === '3') ? version : '2c';
-      let targetPort = Number(port) || 161;
-      let sid = typeof serverId === 'string' ? serverId : '';
-
-      if (sid) {
-        const srv = activeServersStore.find((s) => s.id === sid);
-        if (srv) {
-          targetHost = srv.host || targetHost;
-          if (srv.snmpConfig) {
-            targetCommunity = srv.snmpConfig.community || targetCommunity;
-            targetVersion = srv.snmpConfig.version || targetVersion;
-            targetPort = srv.snmpConfig.port || targetPort;
-          }
-        }
-      }
-
-      const metrics = await snmpServiceSingleton.getMetricsForServer(
-        sid || targetHost,
-        targetHost,
-        targetCommunity,
-        targetVersion,
-        targetPort
-      );
-
-      // Cache on server in memory
-      if (sid) {
-        activeServersStore = activeServersStore.map((s) => {
-          if (s.id === sid) {
-            return {
-              ...s,
-              snmpMetrics: metrics,
-              cpuUsagePercent: metrics.cpu.usagePercent,
-              ramUsagePercent: metrics.memory.usedPercent,
-              ramTotalMb: Math.round(metrics.memory.totalBytes / (1024 * 1024)),
-              ramUsedMb: Math.round(metrics.memory.usedBytes / (1024 * 1024))
-            };
-          }
-          return s;
-        });
-      }
-
-      res.json(metrics);
-    } catch (err: any) {
-      console.error('Error in /api/snmp/metrics:', err);
-      res.status(500).json({ error: err?.message || 'Falha ao obter métricas SNMP' });
-    }
-  });
-
-  // Test SNMP Connection
-  app.post('/api/snmp/test', async (req, res) => {
-    try {
-      const { host, community = 'n4tUr3Z4', version = '2c', port = 161 } = req.body || {};
-      if (!host) {
-        res.status(400).json({ success: false, message: 'Host é obrigatório.' });
-        return;
-      }
-      const result = await snmpServiceSingleton.queryLiveSnmp(
-        host.trim(),
-        community.trim(),
-        version === '1' ? '1' : '2c',
-        Number(port) || 161,
-        2500
-      );
-      res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Erro ao testar SNMP' });
-    }
-  });
-
-  // Update SNMP Config for a Server
-  app.post('/api/snmp/config', (req, res) => {
-    const { serverId, snmpConfig } = req.body;
-    if (!serverId || !snmpConfig) {
-      res.status(400).json({ success: false, message: 'serverId e snmpConfig são obrigatórios.' });
-      return;
-    }
-
-    activeServersStore = activeServersStore.map((s) => {
-      if (s.id === serverId) {
-        return {
-          ...s,
-          snmpConfig: {
-            enabled: snmpConfig.enabled ?? true,
-            version: snmpConfig.version || '2c',
-            community: snmpConfig.community || 'n4tUr3Z4',
-            port: Number(snmpConfig.port) || 161
-          }
-        };
-      }
-      return s;
-    });
-
-    saveServersToDisk(activeServersStore);
-    res.json({ success: true, servers: activeServersStore });
   });
 
   // Vite Middleware for Dev, Static serving for Production

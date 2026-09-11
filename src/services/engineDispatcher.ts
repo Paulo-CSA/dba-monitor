@@ -24,7 +24,9 @@ export async function dispatchTestConnection(params: EngineConnectParams): Promi
         port: params.port || 5432,
         dbUser: params.dbUser || 'postgres',
         dbPassword: params.dbPassword,
-        database: params.database || 'postgres'
+        database: params.database || 'postgres',
+        sslMode: params.sslMode,
+        ssl: params.ssl
       });
       return {
         ...pgResult,
