@@ -174,7 +174,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Activity className="w-4 h-4 text-emerald-400" />
-            <span>Métricas do Banco Selecionado</span>
+            <span>Métricas do Banco</span>
           </button>
 
           <button
@@ -186,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Server className="w-4 h-4 text-indigo-400" />
-            <span>Métricas do Servidor (SNMP)</span>
+            <span>Métricas do Servidor</span>
           </button>
 
           <button
@@ -210,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <FileText className="w-4 h-4 text-emerald-400" />
-            <span>Arquivos de Configuração</span>
+            <span>Configurações</span>
           </button>
 
           <button
@@ -222,7 +222,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-indigo-400" />
-            <span>Saúde e Integridade</span>
+            <span>Saúde</span>
           </button>
 
           <button
