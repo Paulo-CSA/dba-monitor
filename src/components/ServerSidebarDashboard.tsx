@@ -411,7 +411,12 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
         <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-400 flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800">
           <div className="flex items-center space-x-1.5 text-cyan-400 font-bold">
             <Server className="w-3.5 h-3.5" />
-            
+            <span>Frota PostgreSQL</span>
+          </div>
+          <span className="text-emerald-400 font-mono flex items-center space-x-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>Conectado</span>
+          </span>
         </div>
       </aside>
 
