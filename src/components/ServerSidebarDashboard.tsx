@@ -407,7 +407,13 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           )}
         </div>
 
- 
+        {/* Sidebar Footer Status Indicator */}
+        <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-400 flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+          <div className="flex items-center space-x-1.5 text-cyan-400 font-bold">
+            <Server className="w-3.5 h-3.5" />
+            
+        </div>
+      </aside>
 
       {/* ================= MAIN CONTENT PANEL (INFORMACÕES DO SERVIDOR & BANCOS) ================= */}
       <main className="flex-1 space-y-6 min-w-0">
