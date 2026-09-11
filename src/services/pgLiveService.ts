@@ -96,8 +96,8 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       user,
       password,
       database,
-      connectionTimeoutMillis: 10000,
-      statement_timeout: 10000,
+      connectionTimeoutMillis: 3500,
+      statement_timeout: 4000,
       ssl: sslMode
     });
 
@@ -109,8 +109,15 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       lastConnectErr = err;
       try { await client.end(); } catch {}
       const errMsg = err instanceof Error ? err.message : String(err);
-      // If error is password failed or bad db name, retrying with SSL won't help
-      if (errMsg.includes('password authentication failed') || errMsg.includes('database') && errMsg.includes('does not exist')) {
+      // If error is password, bad db, timeout, refused, or host not found, retrying with SSL won't help
+      if (
+        errMsg.includes('password authentication failed') ||
+        (errMsg.includes('database') && errMsg.includes('does not exist')) ||
+        errMsg.includes('ETIMEDOUT') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('ECONNREFUSED') ||
+        errMsg.includes('ENOTFOUND')
+      ) {
         break;
       }
     }

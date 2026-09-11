@@ -27,21 +27,6 @@ import { ServerInstance } from './src/types/serverFleet';
 
 const SERVERS_PERSISTENCE_FILE = path.join(process.cwd(), 'data', 'servers.json');
 
-function loadServersFromDisk(): ServerInstance[] {
-  try {
-    if (fs.existsSync(SERVERS_PERSISTENCE_FILE)) {
-      const data = fs.readFileSync(SERVERS_PERSISTENCE_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.error('Error loading servers.json:', err);
-  }
-  return mockServerFleet;
-}
-
 function saveServersToDisk(servers: ServerInstance[]) {
   try {
     const dir = path.dirname(SERVERS_PERSISTENCE_FILE);
@@ -52,6 +37,27 @@ function saveServersToDisk(servers: ServerInstance[]) {
   } catch (err) {
     console.error('Error saving servers.json:', err);
   }
+}
+
+function loadServersFromDisk(): ServerInstance[] {
+  try {
+    const dir = path.dirname(SERVERS_PERSISTENCE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (fs.existsSync(SERVERS_PERSISTENCE_FILE)) {
+      const data = fs.readFileSync(SERVERS_PERSISTENCE_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error loading servers.json:', err);
+  }
+  // If file doesn't exist yet, seed with mock fleet and save
+  saveServersToDisk(mockServerFleet);
+  return mockServerFleet;
 }
 
 let activeServersStore: ServerInstance[] = loadServersFromDisk();
@@ -131,6 +137,67 @@ async function startServer() {
   app.delete('/api/db/servers/:id', (req, res) => {
     const { id } = req.params;
     activeServersStore = activeServersStore.filter((s) => s.id !== id);
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
+  });
+
+  // Delete a specific database from a server (persisted)
+  app.delete('/api/db/servers/:serverId/databases/:datname', (req, res) => {
+    const { serverId, datname } = req.params;
+    activeServersStore = activeServersStore.map((s) => {
+      if (s.id === serverId) {
+        const remainingDbs = (s.databases || []).filter(
+          (d) => d.datname.toLowerCase() !== datname.toLowerCase()
+        );
+        return {
+          ...s,
+          databases: remainingDbs,
+          totalDatabasesCount: remainingDbs.length
+        };
+      }
+      return s;
+    });
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
+  });
+
+  // Add a database to a server (persisted)
+  app.post('/api/db/servers/:serverId/databases', (req, res) => {
+    const { serverId } = req.params;
+    const { datname, owner, sizeFormatted, encoding } = req.body;
+    if (!datname) {
+      res.status(400).json({ success: false, error: 'Nome do banco (datname) é obrigatório' });
+      return;
+    }
+
+    activeServersStore = activeServersStore.map((s) => {
+      if (s.id === serverId) {
+        const existing = s.databases || [];
+        if (existing.some((d) => d.datname.toLowerCase() === datname.toLowerCase())) {
+          return s;
+        }
+        const newDb = {
+          datname: datname.trim(),
+          sizeBytes: 1073741824,
+          sizeFormatted: sizeFormatted || '1.0 GB',
+          activeConnections: 0,
+          maxConnections: s.maxConnections || 100,
+          tps: 0,
+          cacheHitRatio: 99.5,
+          tablesCount: 0,
+          owner: owner || s.dbUser || 'postgres',
+          encoding: encoding || 'UTF8',
+          status: 'online' as const
+        };
+        const updatedDbs = [...existing, newDb];
+        return {
+          ...s,
+          databases: updatedDbs,
+          totalDatabasesCount: updatedDbs.length
+        };
+      }
+      return s;
+    });
     saveServersToDisk(activeServersStore);
     res.json({ success: true, servers: activeServersStore });
   });

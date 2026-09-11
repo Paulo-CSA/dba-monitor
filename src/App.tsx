@@ -286,7 +286,16 @@ export default function App() {
         })
       );
 
-      setFleetServers(updatedServers);
+      setFleetServers((prevServers) => {
+        return prevServers.map((srv) => {
+          const updated = updatedServers.find((u) => u.id === srv.id);
+          if (!updated) return srv;
+          return {
+            ...updated,
+            databases: updated.databases && updated.databases.length > 0 ? updated.databases : srv.databases
+          };
+        });
+      });
     } catch (err) {
       console.error('Error in fleet servers polling:', err);
     }
@@ -724,6 +733,86 @@ export default function App() {
     }
   };
 
+  const handleDeleteDatabase = async (serverId: string, datname: string) => {
+    setFleetServers((prev) =>
+      prev.map((srv) => {
+        if (srv.id === serverId) {
+          const updatedDbs = (srv.databases || []).filter(
+            (d) => d.datname.toLowerCase() !== datname.toLowerCase()
+          );
+          return {
+            ...srv,
+            databases: updatedDbs,
+            totalDatabasesCount: updatedDbs.length
+          };
+        }
+        return srv;
+      })
+    );
+
+    if (selectedServerId === serverId && selectedDatabaseName.toLowerCase() === datname.toLowerCase()) {
+      const currentServer = fleetServers.find((s) => s.id === serverId);
+      const remainingDbs = (currentServer?.databases || []).filter(
+        (d) => d.datname.toLowerCase() !== datname.toLowerCase()
+      );
+      setSelectedDatabaseName(remainingDbs[0]?.datname || '');
+    }
+
+    try {
+      await fetch(`/api/db/servers/${serverId}/databases/${encodeURIComponent(datname)}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.error('Error deleting database from server:', err);
+    }
+  };
+
+  const handleAddDatabase = async (serverId: string, dbName: string) => {
+    if (!dbName || !dbName.trim()) return;
+    const cleanDbName = dbName.trim();
+    const newDb: DatabaseInfo = {
+      datname: cleanDbName,
+      sizeBytes: 1073741824,
+      sizeFormatted: '1.0 GB',
+      activeConnections: 0,
+      maxConnections: 100,
+      tps: 0,
+      cacheHitRatio: 99.5,
+      tablesCount: 0,
+      owner: 'postgres',
+      encoding: 'UTF8',
+      status: 'online'
+    };
+
+    setFleetServers((prev) =>
+      prev.map((srv) => {
+        if (srv.id === serverId) {
+          const existing = srv.databases || [];
+          if (existing.some((d) => d.datname.toLowerCase() === cleanDbName.toLowerCase())) {
+            return srv;
+          }
+          const updatedDbs = [...existing, newDb];
+          return {
+            ...srv,
+            databases: updatedDbs,
+            totalDatabasesCount: updatedDbs.length
+          };
+        }
+        return srv;
+      })
+    );
+
+    try {
+      await fetch(`/api/db/servers/${serverId}/databases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datname: cleanDbName })
+      });
+    } catch (err) {
+      console.error('Error adding database to server:', err);
+    }
+  };
+
   const handleAddServer = async (newServer: ServerInstance) => {
     setFleetServers((prev) => [...prev, newServer]);
     setSelectedServerId(newServer.id);
@@ -766,10 +855,28 @@ export default function App() {
     liveTopTables?: TableSizeInfo[];
   }) => {
     const newServerId = `srv-${Date.now().toString().slice(-4)}`;
-    const serverPgVersion = serverData.pgVersion || 'PostgreSQL';
+    const serverPgVersion = serverData.pgVersion || (serverData.engine === 'mysql' ? 'MySQL 8.0' : serverData.engine === 'mssql' ? 'SQL Server' : 'PostgreSQL 16');
 
-    const defaultDbName = serverData.database || 'postgres';
-    const databasesList: DatabaseInfo[] = serverData.liveDatabases || [];
+    const defaultDbName = serverData.database?.trim() || (serverData.engine === 'mysql' ? 'mysql' : serverData.engine === 'mssql' ? 'master' : 'postgres');
+    
+    // Always guarantee at least one database is present in the server
+    const databasesList: DatabaseInfo[] = (serverData.liveDatabases && serverData.liveDatabases.length > 0)
+      ? serverData.liveDatabases
+      : [
+          {
+            datname: defaultDbName,
+            sizeBytes: 1073741824,
+            sizeFormatted: '1.0 GB',
+            activeConnections: 0,
+            maxConnections: 100,
+            tps: 0,
+            cacheHitRatio: 99.5,
+            tablesCount: 0,
+            owner: serverData.user || 'postgres',
+            encoding: 'UTF8',
+            status: 'online'
+          }
+        ];
 
     // Primary database is strictly the first database returned or defaultDbName
     const primaryDb = databasesList[0]?.datname || defaultDbName;
@@ -1042,8 +1149,8 @@ export default function App() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Context Selector Bar for Detail Tabs */}
-        {activeTab !== 'dashboard' && activeTab !== 'fleet' && activeServerObject && (
+        {/* Context Selector Bar for Detail Tabs (hidden in dashboard, fleet, and server_metrics) */}
+        {activeTab !== 'dashboard' && activeTab !== 'fleet' && activeTab !== 'server_metrics' && activeServerObject && (
           <SelectedServerContextBar
             servers={fleetServers}
             selectedServerId={activeServerObject.id}
@@ -1072,6 +1179,8 @@ export default function App() {
             onUpdateServer={handleUpdateServer}
             onDeleteServer={handleDeleteServer}
             onAddServer={handleAddServer}
+            onDeleteDatabase={handleDeleteDatabase}
+            onAddDatabase={handleAddDatabase}
             onOpenConnectionsModal={() => {
               setConnectionsModalScope('specific');
               setShowConnectionsModal(true);

@@ -198,8 +198,8 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         server: host,
         port: instanceName ? undefined : port,
         database,
-        connectionTimeout: 15000,
-        requestTimeout: 20000,
+        connectionTimeout: 3500,
+        requestTimeout: 4000,
         options: {
           encrypt: false,
           trustServerCertificate: true,
@@ -221,8 +221,8 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         server: host,
         port: instanceName ? undefined : port,
         database,
-        connectionTimeout: 15000,
-        requestTimeout: 20000,
+        connectionTimeout: 3500,
+        requestTimeout: 4000,
         options: {
           encrypt: false,
           trustServerCertificate: true,
@@ -243,8 +243,8 @@ export async function testAndFetchLiveMssqlData(params: EngineConnectParams): Pr
         server: host,
         port: instanceName ? undefined : port,
         database,
-        connectionTimeout: 15000,
-        requestTimeout: 20000,
+        connectionTimeout: 3500,
+        requestTimeout: 4000,
         options: {
           encrypt: true,
           trustServerCertificate: true,

@@ -1,0 +1,131 @@
+[
+  {
+    "id": "srv-prod-01",
+    "name": "SRV-DB-PROD-01 (PostgreSQL)",
+    "host": "192.168.1.50",
+    "port": 5432,
+    "engine": "postgres",
+    "environment": "Produção",
+    "pgVersion": "PostgreSQL 16.2 (Ubuntu 22.04 LTS)",
+    "uptimeFormatted": "42d 14h 28m",
+    "uptimeSeconds": 3680890,
+    "cpuUsagePercent": 24,
+    "avgLatencyMs": 1.45,
+    "ramTotalMb": 32768,
+    "ramUsedMb": 19660,
+    "ramUsagePercent": 60,
+    "sharedBuffers": "8GB",
+    "workMem": "64MB",
+    "maintenanceWorkMem": "1GB",
+    "effectiveCacheSize": "24GB",
+    "maxConnections": 300,
+    "totalDatabasesCount": 3,
+    "totalActiveConnections": 42,
+    "totalSizeFormatted": "185.4 GB",
+    "status": "healthy",
+    "dbUser": "postgres",
+    "snmpConfig": {
+      "enabled": true,
+      "version": "2c",
+      "community": "n4tUr3Z4",
+      "port": 161
+    },
+    "databases": [
+      {
+        "datname": "production_db",
+        "sizeBytes": 128849018880,
+        "sizeFormatted": "120.0 GB",
+        "activeConnections": 28,
+        "maxConnections": 300,
+        "tps": 340,
+        "cacheHitRatio": 99.8,
+        "tablesCount": 84,
+        "owner": "postgres",
+        "encoding": "UTF8",
+        "status": "online"
+      },
+      {
+        "datname": "analytics_db",
+        "sizeBytes": 53687091200,
+        "sizeFormatted": "50.0 GB",
+        "activeConnections": 10,
+        "maxConnections": 100,
+        "tps": 85,
+        "cacheHitRatio": 99.2,
+        "tablesCount": 42,
+        "owner": "postgres",
+        "encoding": "UTF8",
+        "status": "online"
+      },
+      {
+        "datname": "auth_db",
+        "sizeBytes": 16556589056,
+        "sizeFormatted": "15.4 GB",
+        "activeConnections": 4,
+        "maxConnections": 50,
+        "tps": 45,
+        "cacheHitRatio": 99.9,
+        "tablesCount": 16,
+        "owner": "postgres",
+        "encoding": "UTF8",
+        "status": "online"
+      }
+    ]
+  },
+  {
+    "id": "srv-homolog-01",
+    "name": "SRV-DB-HML-01 (MySQL)",
+    "host": "172.16.0.200",
+    "port": 3306,
+    "engine": "mysql",
+    "environment": "Homologação",
+    "pgVersion": "MySQL 8.0.36 Community",
+    "uptimeFormatted": "18d 06h 12m",
+    "uptimeSeconds": 1577520,
+    "cpuUsagePercent": 18,
+    "avgLatencyMs": 2.1,
+    "ramTotalMb": 16384,
+    "ramUsedMb": 7864,
+    "ramUsagePercent": 48,
+    "maxConnections": 151,
+    "totalDatabasesCount": 2,
+    "totalActiveConnections": 14,
+    "totalSizeFormatted": "48.2 GB",
+    "status": "healthy",
+    "dbUser": "root",
+    "snmpConfig": {
+      "enabled": true,
+      "version": "2c",
+      "community": "n4tUr3Z4",
+      "port": 161
+    },
+    "databases": [
+      {
+        "datname": "ecommerce_hml",
+        "sizeBytes": 34359738368,
+        "sizeFormatted": "32.0 GB",
+        "activeConnections": 11,
+        "maxConnections": 151,
+        "tps": 110,
+        "cacheHitRatio": 98.9,
+        "tablesCount": 65,
+        "owner": "root",
+        "encoding": "utf8mb4",
+        "status": "online"
+      },
+      {
+        "datname": "inventory_db",
+        "sizeBytes": 17394614272,
+        "sizeFormatted": "16.2 GB",
+        "activeConnections": 3,
+        "maxConnections": 50,
+        "tps": 30,
+        "cacheHitRatio": 99.1,
+        "tablesCount": 22,
+        "owner": "root",
+        "encoding": "utf8mb4",
+        "status": "online"
+      }
+    ]
+  }
+]

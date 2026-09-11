@@ -30,7 +30,8 @@ import {
   Pencil,
   Plus,
   X,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 
 interface ServerSidebarDashboardProps {
@@ -48,6 +49,8 @@ interface ServerSidebarDashboardProps {
   onUpdateServer?: (updatedServer: ServerInstance) => void;
   onDeleteServer?: (serverId: string) => void;
   onAddServer?: (newServer: ServerInstance) => void;
+  onDeleteDatabase?: (serverId: string, datname: string) => void;
+  onAddDatabase?: (serverId: string, dbName: string) => void;
   onOpenConnectionsModal?: () => void;
   silencedDbs?: Record<string, boolean>;
   onAcknowledgeAlert?: (alertId: string, serverId?: string, dbName?: string) => void;
@@ -69,6 +72,8 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   onUpdateServer,
   onDeleteServer,
   onAddServer,
+  onDeleteDatabase,
+  onAddDatabase,
   onOpenConnectionsModal,
   silencedDbs = {},
   onAcknowledgeAlert,
@@ -79,6 +84,9 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'databases' | 'metrics' | 'queries_locks'>('databases');
   const [editingServer, setEditingServer] = useState<ServerInstance | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showAddDbModal, setShowAddDbModal] = useState(false);
+  const [newDbInput, setNewDbInput] = useState('');
+  const [dbToDelete, setDbToDelete] = useState<string | null>(null);
 
   const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0];
 
@@ -525,6 +533,26 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
             {/* TAB 1: DATABASES LIST & METRICS SUMMARY */}
             {activeTab === 'databases' && (
               <div className="space-y-6">
+                {/* Header with Add Database Action */}
+                <div className="flex items-center justify-between bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <Database className="w-4 h-4 text-cyan-400" />
+                    <span className="text-sm font-bold text-white">Bancos de Dados ({activeServer.databases.length})</span>
+                  </div>
+                  {onAddDatabase && (
+                    <button
+                      onClick={() => {
+                        setNewDbInput('');
+                        setShowAddDbModal(true);
+                      }}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Adicionar Banco</span>
+                    </button>
+                  )}
+                </div>
+
                 {/* Databases Grid Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {activeServer.databases.map((db) => {
@@ -604,6 +632,19 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
                               <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase">
                                 Selecionado
                               </span>
+                            )}
+
+                            {onDeleteDatabase && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDbToDelete(db.datname);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-rose-950 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-900 transition-colors cursor-pointer ml-1"
+                                title={`Remover o banco ${db.datname} da frota`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         </div>
@@ -777,6 +818,117 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
           if (onDeleteServer) onDeleteServer(serverId);
         }}
       />
+
+      {/* Modal para Adicionar Banco de Dados */}
+      {showAddDbModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Database className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Adicionar Novo Banco</h3>
+              </div>
+              <button
+                onClick={() => setShowAddDbModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Informe o nome do banco de dados a ser cadastrado e monitorado no servidor <strong>{activeServer?.name}</strong>.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newDbInput.trim() && onAddDatabase && activeServer) {
+                  onAddDatabase(activeServer.id, newDbInput.trim());
+                  setShowAddDbModal(false);
+                  setNewDbInput('');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Nome do Banco de Dados (datname)
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newDbInput}
+                  onChange={(e) => setNewDbInput(e.target.value)}
+                  placeholder="ex: app_production, erp_vendas, cliente_db"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDbModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newDbInput.trim()}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cadastrar Banco
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Confirmar Exclusão de Banco de Dados */}
+      {dbToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-rose-400">
+              <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-800">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Remover Banco de Dados</h3>
+                <p className="text-xs text-slate-400 font-mono">Servidor: {activeServer?.name}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Tem certeza que deseja remover o banco de dados <strong className="text-white font-mono">{dbToDelete}</strong> do monitoramento deste servidor?
+            </p>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDbToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteDatabase && activeServer && dbToDelete) {
+                    onDeleteDatabase(activeServer.id, dbToDelete);
+                    setDbToDelete(null);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition-colors cursor-pointer"
+              >
+                Sim, Remover Banco
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
