@@ -413,10 +413,7 @@ export const ServerSidebarDashboard: React.FC<ServerSidebarDashboardProps> = ({
             <Server className="w-3.5 h-3.5" />
             
           </div>
-          <span className="text-emerald-400 font-mono flex items-center space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            
-          </span>
+          
         </div>
       </aside>
 
