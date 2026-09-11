@@ -26,6 +26,23 @@ export interface DatabaseInfo {
   topTables?: TableSizeInfo[];
 }
 
+export interface ServerHardwareDisk {
+  path: string;
+  device?: string;
+  totalBytes: number;
+  usedPercent: number;
+}
+
+export interface ServerHardwareSpecs {
+  ramTotalMb?: number;
+  swapTotalMb?: number;
+  cpuCoresCount?: number;
+  cpuUsagePercent?: number;
+  uptimeSeconds?: number;
+  uptimeFormatted?: string;
+  disks?: ServerHardwareDisk[];
+}
+
 export interface ServerInstance {
   id: string;
   name: string;
@@ -59,5 +76,6 @@ export interface ServerInstance {
   topTables?: TableSizeInfo[];
   snmpConfig?: SnmpConfig;
   snmpMetrics?: SnmpServerMetrics;
+  hardwareSpecs?: ServerHardwareSpecs;
 }
 

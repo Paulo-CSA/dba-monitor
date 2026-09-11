@@ -873,10 +873,12 @@ Responda em formato Markdown estruturado em Português.`;
       let targetVersion: '2c' | '1' | '3' = (version === '1' || version === '3') ? version : '2c';
       let targetPort = Number(port) || 161;
       let sid = typeof serverId === 'string' ? serverId : '';
+      let srvObj: any = null;
 
       if (sid) {
         const srv = activeServersStore.find((s) => s.id === sid);
         if (srv) {
+          srvObj = srv;
           targetHost = srv.host || targetHost;
           if (srv.snmpConfig) {
             targetCommunity = srv.snmpConfig.community || targetCommunity;
@@ -891,7 +893,8 @@ Responda em formato Markdown estruturado em Português.`;
         targetHost,
         targetCommunity,
         targetVersion,
-        targetPort
+        targetPort,
+        srvObj
       );
 
       // Cache on server in memory
@@ -904,7 +907,8 @@ Responda em formato Markdown estruturado em Português.`;
               cpuUsagePercent: metrics.cpu.usagePercent,
               ramUsagePercent: metrics.memory.usedPercent,
               ramTotalMb: Math.round(metrics.memory.totalBytes / (1024 * 1024)),
-              ramUsedMb: Math.round(metrics.memory.usedBytes / (1024 * 1024))
+              ramUsedMb: Math.round(metrics.memory.usedBytes / (1024 * 1024)),
+              uptimeFormatted: metrics.sysUpTime || s.uptimeFormatted
             };
           }
           return s;
@@ -957,6 +961,33 @@ Responda em formato Markdown estruturado em Português.`;
             community: snmpConfig.community || 'n4tUr3Z4',
             port: Number(snmpConfig.port) || 161
           }
+        };
+      }
+      return s;
+    });
+
+    saveServersToDisk(activeServersStore);
+    res.json({ success: true, servers: activeServersStore });
+  });
+
+  // Update Hardware Specs calibration for a Server (persisted to servers.json)
+  app.post('/api/snmp/hardware-specs', (req, res) => {
+    const { serverId, hardwareSpecs } = req.body;
+    if (!serverId || !hardwareSpecs) {
+      res.status(400).json({ success: false, message: 'serverId e hardwareSpecs são obrigatórios.' });
+      return;
+    }
+
+    activeServersStore = activeServersStore.map((s) => {
+      if (s.id === serverId) {
+        return {
+          ...s,
+          hardwareSpecs: {
+            ...s.hardwareSpecs,
+            ...hardwareSpecs
+          },
+          ramTotalMb: hardwareSpecs.ramTotalMb || s.ramTotalMb,
+          uptimeFormatted: hardwareSpecs.uptimeFormatted || s.uptimeFormatted
         };
       }
       return s;
