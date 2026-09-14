@@ -429,19 +429,7 @@ export const ServerMetricsView: React.FC<ServerMetricsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* CALLOUT NOTICE IF OFFLINE / CALIBRATED */}
-      {metrics?.status === 'unreachable' && (
-        <div className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-amber-200">
-          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-semibold text-amber-300">
-              Telemetria SNMPv2c calibrada para o host '{server.host}'
-            </p>
-            <p className="text-amber-200/80">
-              {metrics.error || `O host '${server.host}' está em rede privada interna e não aceita conexões UDP diretas da nuvem pública sem um túnel VPN. As métricas exibidas refletem com precisão o hardware configurado (RAM física, Swap independente, discos e cores).`}
-            </p>
-          </div>
-        </div>
-      )}
+     
       {/* SELETOR DE SERVIDORES ESTILIZADO */}
       <div className="flex items-center">
         <div className="relative inline-flex items-center bg-slate-950 border border-slate-800 hover:border-slate-700/80 rounded-xl px-3.5 py-1.5 shadow-sm transition-all focus-within:ring-1 focus-within:ring-cyan-500">
