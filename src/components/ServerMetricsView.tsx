@@ -398,7 +398,11 @@ export const ServerMetricsView: React.FC<ServerMetricsViewProps> = ({
           </div>
         </div>
       )}
-
+      <div> 
+      <p className="font-semibold text-amber-300">
+              Servidor:'{server.host}'
+            </p>
+      </div>
       {/* TOP KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* CPU Card */}

@@ -112,29 +112,34 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
       </div>
     );
   }
+  // Top 5 servers with highest TPS
   const topTpsServers = [...servers]
-    .map((s) => ({
+    .map((s, idx) => ({
       id: s.id,
+      axisKey: `tps_${s.id}_${idx}`,
       name: s.name.length > 20 ? s.name.substring(0, 18) + '...' : s.name,
       fullName: s.name,
+      serverShortName: s.name.replace(/\s*\(.*?\)/, '').trim(),
       host: s.host,
       environment: s.environment,
-      tps: s.databases.reduce((acc, db) => acc + (db.tps || 0), 0),
-      connections: s.totalActiveConnections
+      tps: (s.databases || []).reduce((acc, db) => acc + (db.tps || 0), 0),
+      connections: s.totalActiveConnections || 0
     }))
     .sort((a, b) => b.tps - a.tps)
     .slice(0, 5);
 
-  // All databases mapped flat for fleet-wide ranking
+  // All databases mapped flat for fleet-wide ranking (with unique identifiers)
   const allDatabases = servers.flatMap((s) =>
-    s.databases.map((db) => ({
+    (s.databases || []).map((db, idx) => ({
+      uniqueKey: `${s.id}::${db.datname}::${idx}`,
       dbName: db.datname,
       serverName: s.name,
+      serverShortName: s.name.replace(/\s*\(.*?\)/, '').trim(),
       serverId: s.id,
       host: s.host,
       environment: s.environment,
-      sizeFormatted: db.sizeFormatted,
-      sizeGb: Number((db.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)),
+      sizeFormatted: db.sizeFormatted || '0 B',
+      sizeGb: Number(((db.sizeBytes || 0) / (1024 * 1024 * 1024)).toFixed(1)),
       connections: db.activeConnections || 0,
       tps: db.tps || 0
     }))
@@ -142,31 +147,42 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
 
   // Server connections across fleet (sorted by active connections)
   const serverConnectionsData = [...servers]
-    .map((s) => ({
+    .map((s, idx) => ({
       id: s.id,
+      axisKey: `srv_${s.id}_${idx}`,
       name: s.name.length > 20 ? s.name.substring(0, 18) + '...' : s.name,
       fullName: s.name,
+      serverShortName: s.name.replace(/\s*\(.*?\)/, '').trim(),
       host: s.host,
       environment: s.environment,
-      connections: s.totalActiveConnections || s.databases.reduce((acc, db) => acc + (db.activeConnections || 0), 0),
-      databasesCount: s.databases.length,
-      tps: s.databases.reduce((acc, db) => acc + (db.tps || 0), 0)
+      connections: s.totalActiveConnections || (s.databases || []).reduce((acc, db) => acc + (db.activeConnections || 0), 0),
+      databasesCount: (s.databases || []).length,
+      tps: (s.databases || []).reduce((acc, db) => acc + (db.tps || 0), 0)
     }))
     .sort((a, b) => b.connections - a.connections);
 
-  // Top 5 databases with most active connections
+  // Top 5 databases with most active connections (sorted strictly by active connections descending)
   const topDbConnections = [...allDatabases]
-    .map((db) => ({
-      ...db,
-      displayName: db.dbName.length > 18 ? db.dbName.substring(0, 16) + '...' : db.dbName
-    }))
     .sort((a, b) => b.connections - a.connections)
-    .slice(0, 5);
+    .slice(0, 5)
+    .map((db, idx) => ({
+      ...db,
+      rank: idx + 1,
+      // axisKey is globally unique so Recharts category indices can never collide or swap
+      axisKey: `conn_${db.serverId}::${db.dbName}::${idx}`,
+      displayName: db.dbName.length > 16 ? db.dbName.substring(0, 14) + '...' : db.dbName
+    }));
 
-  // Top 5 largest databases across all servers
+  // Top 5 largest databases across all servers (sorted strictly by size in GB descending)
   const topSizeDatabases = [...allDatabases]
     .sort((a, b) => b.sizeGb - a.sizeGb)
-    .slice(0, 5);
+    .slice(0, 5)
+    .map((db, idx) => ({
+      ...db,
+      rank: idx + 1,
+      axisKey: `size_${db.serverId}::${db.dbName}::${idx}`,
+      displayName: db.dbName.length > 16 ? db.dbName.substring(0, 14) + '...' : db.dbName
+    }));
 
   // Distribution by environment tag
   const envCounts = {
@@ -222,9 +238,7 @@ export const GlobalDashboardView: React.FC<GlobalDashboardViewProps> = ({
           </div>
         </div>
       </div>
-
-      
-
+ 
       {/* Global Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Servidores */}
