@@ -1358,6 +1358,8 @@ export default function App() {
           activeServerObject ? (
             <ServerMetricsView
               server={activeServerObject}
+              servers={fleetServers}
+              onSelectServer={(srvId) => handleSelectServer(srvId)}
               onSwitchToDbMetrics={() => setActiveTab('metrics')}
               onUpdateServer={handleUpdateServer}
             />

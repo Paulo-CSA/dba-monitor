@@ -16,6 +16,7 @@ import {
   Radio,
   Plus,
   Trash2,
+  ChevronDown,
   X
 } from 'lucide-react';
 import {
@@ -33,15 +34,58 @@ import { formatBytes } from '../utils/formatters';
 
 interface ServerMetricsViewProps {
   server: ServerInstance | null;
+  servers?: ServerInstance[];
+  onSelectServer?: (serverId: string) => void;
   onSwitchToDbMetrics?: () => void;
   onUpdateServer?: (updated: ServerInstance) => void;
 }
 
 export const ServerMetricsView: React.FC<ServerMetricsViewProps> = ({
   server,
+  servers,
+  onSelectServer,
   onSwitchToDbMetrics,
   onUpdateServer
 }) => {
+  const [internalServers, setInternalServers] = useState<ServerInstance[]>(servers || []);
+
+  useEffect(() => {
+    if (servers && servers.length > 0) {
+      setInternalServers(servers);
+    } else {
+      fetch('/api/db/servers')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setInternalServers(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [servers]);
+
+  const activeServersList = (internalServers && internalServers.length > 0)
+    ? internalServers
+    : (server ? [server] : []);
+
+  const getEnvShort = (env?: string) => {
+    if (!env) return 'SRV';
+    switch (env) {
+      case 'Produção':
+        return 'PROD';
+      case 'Desenvolvimento':
+        return 'DEV';
+      case 'Homologação':
+        return 'HOMO';
+      case 'Staging':
+        return 'STG';
+      case 'Testes':
+      case 'QA':
+        return 'QA';
+      default:
+        return env.substring(0, 4).toUpperCase();
+    }
+  };
   const [metrics, setMetrics] = useState<SnmpServerMetrics | null>(null);
   const [isAutoRefresh, setIsAutoRefresh] = useState<boolean>(true);
   const [refreshRateSec, setRefreshRateSec] = useState<number>(3);
@@ -398,10 +442,33 @@ export const ServerMetricsView: React.FC<ServerMetricsViewProps> = ({
           </div>
         </div>
       )}
-      <div> 
-        <p className="font-semibold text-amber-300">
-              Servidor: {server.name || server.host}
-        </p>
+      {/* SELETOR DE SERVIDORES ESTILIZADO */}
+      <div className="flex items-center">
+        <div className="relative inline-flex items-center bg-slate-950 border border-slate-800 hover:border-slate-700/80 rounded-xl px-3.5 py-1.5 shadow-sm transition-all focus-within:ring-1 focus-within:ring-cyan-500">
+          <Server className="w-4 h-4 text-cyan-400 flex-shrink-0 mr-2" />
+          <span className="text-xs font-semibold text-sky-400 mr-2 select-none">Servidor:</span>
+          <div className="relative flex items-center pr-6">
+            <select
+              value={server.id}
+              onChange={(e) => {
+                if (onSelectServer) {
+                  onSelectServer(e.target.value);
+                }
+              }}
+              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer appearance-none tracking-wide"
+            >
+              {activeServersList.map((srv) => {
+                const srvNameClean = srv.name.replace(/\s*\(.*?\)/, '').trim();
+                return (
+                  <option key={srv.id} value={srv.id} className="bg-slate-950 text-slate-100 font-sans py-1">
+                    [{getEnvShort(srv.environment)}] {srvNameClean || srv.name} ({srv.host})
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-0 pointer-events-none" />
+          </div>
+        </div>
       </div>
       {/* TOP KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
