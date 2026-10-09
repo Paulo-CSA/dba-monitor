@@ -10,6 +10,7 @@ export interface LiveConnectParams {
   dbUser: string;
   dbPassword?: string;
   database: string;
+  ssl?: boolean;
 }
 
 export interface LiveConnectResult {
@@ -49,6 +50,9 @@ export function parsePgHost(rawHost: string, defaultPort = 5432): { host: string
 function translatePgError(err: unknown, host: string, port: number, user: string, database: string): string {
   const msg = err instanceof Error ? err.message : String(err);
 
+  if (msg.includes('The server does not support SSL connections')) {
+    return `O servidor PostgreSQL em ${host}:${port} não possui suporte a SSL ativado (parâmetro 'ssl = off' no postgresql.conf). Na tela de conexão, selecione a opção "SSL Desativado" para conectar diretamente sem criptografia.`;
+  }
   if (msg.includes('password authentication failed') || msg.includes('authentication failed')) {
     return `Falha de autenticação: A senha informada para o usuário '${user}' está incorreta no PostgreSQL (ou o usuário não possui permissão no banco '${database}'). Verifique se a senha é exatamente a mesma utilizada no DBeaver.`;
   }
@@ -86,10 +90,18 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
   let client: pg.Client;
   let isConnected = false;
   let lastConnectErr: unknown = null;
+  let firstConnectErr: unknown = null;
 
-  const sslOptions = [false, { rejectUnauthorized: false }];
+  // Determine SSL modes to try based on params.ssl
+  const sslOptions: (boolean | { rejectUnauthorized: boolean })[] =
+    params.ssl === true
+      ? [{ rejectUnauthorized: false }]
+      : params.ssl === false
+        ? [false]
+        : [false, { rejectUnauthorized: false }];
 
-  for (const sslMode of sslOptions) {
+  for (let i = 0; i < sslOptions.length; i++) {
+    const sslMode = sslOptions[i];
     client = new pg.Client({
       host,
       port,
@@ -106,6 +118,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       isConnected = true;
       break;
     } catch (err: unknown) {
+      if (i === 0) firstConnectErr = err;
       lastConnectErr = err;
       try { await client.end(); } catch {}
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -120,6 +133,15 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
       ) {
         break;
       }
+    }
+  }
+
+  // If the second attempt failed because the server does not support SSL,
+  // but we had a prior non-SSL error, prioritize the non-SSL error if params.ssl wasn't explicitly true
+  if (!isConnected && params.ssl !== true && firstConnectErr) {
+    const lastErrMsg = lastConnectErr instanceof Error ? lastConnectErr.message : String(lastConnectErr);
+    if (lastErrMsg.includes('The server does not support SSL connections')) {
+      lastConnectErr = firstConnectErr;
     }
   }
 
@@ -203,7 +225,7 @@ export async function testAndFetchLivePgData(params: LiveConnectParams): Promise
               database: dbName,
               connectionTimeoutMillis: 2500,
               statement_timeout: 3000,
-              ssl: false
+              ssl: params.ssl === true ? { rejectUnauthorized: false } : false
             });
             await secClient.connect();
             const secTblRes = await secClient.query(`
@@ -586,6 +608,7 @@ export async function fetchLiveConnectionsForDb(params: {
   dbUser?: string;
   dbPassword?: string;
   database?: string;
+  ssl?: boolean;
 }): Promise<{
   success: boolean;
   queries: StuckQuery[];
@@ -612,7 +635,8 @@ export async function fetchLiveConnectionsForDb(params: {
     port: params.port || 5432,
     dbUser: params.dbUser || 'postgres',
     dbPassword: params.dbPassword || '',
-    database: targetDb
+    database: targetDb,
+    ssl: params.ssl
   });
 
   // If connection failed (e.g., target database was dropped), retry with 'postgres' default database
@@ -622,7 +646,8 @@ export async function fetchLiveConnectionsForDb(params: {
       port: params.port || 5432,
       dbUser: params.dbUser || 'postgres',
       dbPassword: params.dbPassword || '',
-      database: 'postgres'
+      database: 'postgres',
+      ssl: params.ssl
     });
   }
 

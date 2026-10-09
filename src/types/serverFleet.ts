@@ -50,6 +50,7 @@ export interface ServerInstance {
   port: number;
   engine?: 'postgres' | 'mysql' | 'mssql';
   authMode?: string;
+  ssl?: boolean;
   environment: 'Produção' | 'Desenvolvimento' | 'Homologação';
   pgVersion: string;
   uptimeFormatted: string;

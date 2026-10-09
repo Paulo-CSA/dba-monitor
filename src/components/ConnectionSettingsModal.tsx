@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Database, Server, CheckCircle2, X, RefreshCw, Lock, Unlock, Key, User, Eye, EyeOff, AlertCircle, Sparkles, Layers, ShieldCheck, AlertTriangle, HelpCircle } from 'lucide-react';
 import { DatabaseInfo, TableSizeInfo } from '../types/serverFleet';
 import { FileLocationSetting } from '../types/config';
 import { DATABASE_ENGINES, DatabaseEngineType } from '../types/databaseEngines';
@@ -15,6 +15,7 @@ interface ConnectionSettingsModalProps {
     database?: string;
     engine?: DatabaseEngineType;
     authMode?: string;
+    ssl?: boolean;
     pgVersion?: string;
     uptimeFormatted?: string;
     uptimeSeconds?: number;
@@ -38,6 +39,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
 }) => {
   const [engine, setEngine] = useState<DatabaseEngineType>('postgres');
   const [authMode, setAuthMode] = useState<string>('Nativa (SCRAM-SHA-256 / MD5)');
+  const [ssl, setSsl] = useState<boolean>(false);
   const [serverName, setServerName] = useState('Servidor PostgreSQL');
   const [host, setHost] = useState('192.168.1.100');
   const [port, setPort] = useState(5432);
@@ -98,7 +100,8 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
           dbPassword: password,
           database: targetDb,
           engine,
-          authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode
+          authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode,
+          ssl
         })
       });
       const data = await res.json();
@@ -234,6 +237,7 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
         database: primaryDb,
         engine,
         authMode: engine === 'mssql' ? 'SQL Server Authentication' : authMode,
+        ssl,
         pgVersion: versionStr || DATABASE_ENGINES[engine].name,
         uptimeFormatted,
         uptimeSeconds,
@@ -437,6 +441,57 @@ export const ConnectionSettingsModal: React.FC<ConnectionSettingsModalProps> = (
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Opção de Conexão com SSL Ativo ou Desativado */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-300 font-semibold flex items-center space-x-1.5 text-xs">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Criptografia de Conexão (SSL / TLS)</span>
+              </label>
+              <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded ${
+                ssl
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {ssl ? 'SSL ATIVO' : 'SSL DESATIVADO'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setSsl(false)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 border transition-all cursor-pointer ${
+                  !ssl
+                    ? 'bg-slate-800 border-amber-500/70 text-white shadow-md ring-1 ring-amber-500/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <Unlock className={`w-3.5 h-3.5 ${!ssl ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span>SSL Desativado (Texto Plano)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSsl(true)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 border transition-all cursor-pointer ${
+                  ssl
+                    ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 shadow-md ring-1 ring-cyan-500/40'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <Lock className={`w-3.5 h-3.5 ${ssl ? 'text-cyan-400' : 'text-slate-500'}`} />
+                <span>SSL Ativo (Criptografado)</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed pt-0.5">
+              {!ssl
+                ? 'Recomendado para servidores locais e IPs privados (ex: 172.16.x.x, 192.168.x.x) sem SSL configurado no postgresql.conf, evitando o erro "The server does not support SSL connections".'
+                : 'Utiliza criptografia SSL/TLS durante o handshake com o servidor remoto.'}
+            </p>
           </div>
 
           {/* Ambiente */}

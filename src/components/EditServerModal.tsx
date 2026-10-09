@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ServerInstance } from '../types/serverFleet';
-import { Server, X, Trash2, Save, Lock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2, ShieldCheck, Database, AlertTriangle } from 'lucide-react';
+import { Server, X, Trash2, Save, Lock, Unlock, Key, User, Eye, EyeOff, ShieldAlert, Sparkles, RefreshCw, CheckCircle2, ShieldCheck, Database, AlertTriangle } from 'lucide-react';
 
 interface EditServerModalProps {
   isOpen: boolean;
@@ -34,6 +34,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
         port: server.port,
         engine: server.engine || 'postgres',
         authMode: server.authMode || (server.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
+        ssl: server.ssl !== undefined ? server.ssl : false,
         dbUser: server.dbUser || 'postgres',
         dbPassword: server.dbPassword || '',
         database: currentDb,
@@ -72,7 +73,8 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
           dbPassword: formData.dbPassword || server.dbPassword || '',
           database: targetDb,
           engine: activeEngine,
-          authMode: activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined
+          authMode: activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined,
+          ssl: formData.ssl !== undefined ? formData.ssl : (server.ssl ?? false)
         })
       });
       const data = await res.json();
@@ -127,6 +129,7 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
       port: Number(formData.port) || server.port,
       engine: activeEngine,
       authMode: formData.authMode || (activeEngine === 'mssql' ? 'SQL Server Authentication' : undefined),
+      ssl: formData.ssl !== undefined ? formData.ssl : (server.ssl ?? false),
       dbUser: (formData.dbUser || 'postgres').trim(),
       dbPassword: formData.dbPassword || '',
       environment: (formData.environment as ServerInstance['environment']) || server.environment,
@@ -300,6 +303,57 @@ export const EditServerModal: React.FC<EditServerModalProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Opção de Criptografia SSL / TLS */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-200 font-semibold flex items-center space-x-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Criptografia de Conexão (SSL / TLS)</span>
+              </label>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                formData.ssl
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {formData.ssl ? 'SSL ATIVO' : 'SSL DESATIVADO'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, ssl: false }))}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 border transition-all cursor-pointer ${
+                  !formData.ssl
+                    ? 'bg-slate-800 border-amber-500/70 text-white shadow ring-1 ring-amber-500/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <Unlock className={`w-3.5 h-3.5 ${!formData.ssl ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span>SSL Desativado (Texto Plano)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, ssl: true }))}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-2 border transition-all cursor-pointer ${
+                  formData.ssl
+                    ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 shadow ring-1 ring-cyan-500/40'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <Lock className={`w-3.5 h-3.5 ${formData.ssl ? 'text-cyan-400' : 'text-slate-500'}`} />
+                <span>SSL Ativo (Criptografado)</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed pt-0.5">
+              {!formData.ssl
+                ? 'Conecta sem exigir SSL. Essencial para servidores PostgreSQL com "ssl = off" no postgresql.conf.'
+                : 'Exige criptografia SSL/TLS na conexão com o banco de dados.'}
+            </p>
           </div>
 
           {/* Versão e Bancos Consultados no Servidor */}

@@ -126,7 +126,7 @@ export async function testAndFetchLiveMysqlData(params: EngineConnectParams): Pr
       password,
       database,
       connectTimeout: 10000,
-      ssl: { rejectUnauthorized: false }
+      ssl: params.ssl === true ? { rejectUnauthorized: false } : undefined
     });
 
     // 1. Fetch version

@@ -92,6 +92,7 @@ export interface EngineConnectParams {
   database?: string;
   engine?: DatabaseEngineType;
   authMode?: string;
+  ssl?: boolean;
 }
 
 export interface EngineConnectResult {

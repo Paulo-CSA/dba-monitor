@@ -216,7 +216,8 @@ export default function App() {
                 dbPassword: srv.dbPassword,
                 database: targetDb,
                 serverId: srv.id,
-                engine: srv.engine
+                engine: srv.engine,
+                ssl: srv.ssl
               })
             });
 
@@ -923,6 +924,7 @@ export default function App() {
       authMode: serverData.authMode || (serverData.engine === 'mssql' ? 'SQL Server Authentication' : undefined),
       dbUser: serverData.user || 'postgres',
       dbPassword: serverData.password || '',
+      ssl: serverData.ssl ?? false,
       environment: serverData.environment || 'Produção',
       pgVersion: serverPgVersion,
       uptimeFormatted: serverData.uptimeFormatted || '0d 0h 0m',

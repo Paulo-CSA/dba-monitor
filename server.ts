@@ -90,7 +90,7 @@ async function startServer() {
 
   // Test connection to live database endpoint (PostgreSQL, MySQL, Microsoft SQL Server)
   app.post('/api/db/test-connection', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, engine, authMode } = req.body;
+    const { host, port, dbUser, dbPassword, database, engine, authMode, ssl } = req.body;
     const result = await dispatchTestConnection({
       host,
       port: Number(port) || (engine === 'mysql' ? 3306 : engine === 'mssql' ? 1433 : 5432),
@@ -98,7 +98,8 @@ async function startServer() {
       dbPassword,
       database,
       engine: engine || 'postgres',
-      authMode: authMode || (engine === 'mssql' ? 'SQL Server Authentication' : undefined)
+      authMode: authMode || (engine === 'mssql' ? 'SQL Server Authentication' : undefined),
+      ssl: typeof ssl === 'boolean' ? ssl : undefined
     });
     res.json(result);
   });
@@ -288,13 +289,14 @@ async function startServer() {
 
   // Fetch live active connections specifically for a database
   app.post('/api/db/fetch-live-connections', async (req, res) => {
-    const { host, port, dbUser, dbPassword, database, serverId, engine: reqEngine } = req.body;
+    const { host, port, dbUser, dbPassword, database, serverId, engine: reqEngine, ssl } = req.body;
     
     let targetHost = host;
     let targetPort = port;
     let targetUser = dbUser;
     let targetPassword = dbPassword;
     let targetEngine = reqEngine || 'postgres';
+    let targetSsl: boolean | undefined = typeof ssl === 'boolean' ? ssl : undefined;
 
     if (serverId && typeof serverId === 'string') {
       const foundSrv = activeServersStore.find((s) => s.id === serverId);
@@ -304,6 +306,9 @@ async function startServer() {
         targetUser = targetUser || foundSrv.dbUser;
         targetPassword = targetPassword || foundSrv.dbPassword;
         targetEngine = foundSrv.engine || targetEngine;
+        if (targetSsl === undefined && typeof foundSrv.ssl === 'boolean') {
+          targetSsl = foundSrv.ssl;
+        }
       }
     }
 
@@ -401,7 +406,8 @@ async function startServer() {
       port: Number(targetPort) || 5432,
       dbUser: targetUser,
       dbPassword: targetPassword,
-      database
+      database,
+      ssl: targetSsl
     });
 
     if (result.success && result.databases && serverId) {
